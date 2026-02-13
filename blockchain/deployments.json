@@ -1,0 +1,10 @@
+{
+  "sepolia": {
+    "contractName": "DisasterCertificate",
+    "contractAddress": "0x4ae404489cb792f52af2b86752559f4d3c3b4a70",
+    "deployer": "0x63A22B04addD5E8fd248bf10D5c7D48233957050",
+    "transactionHash": "0x79b1ffd52a5c075a92771a9ba0f28daa6fa22487769ea1e5c5d71f421d8cbb1f",
+    "blockNumber": "10253399",
+    "deployedAt": "2026-02-13T17:20:30.586Z"
+  }
+}
