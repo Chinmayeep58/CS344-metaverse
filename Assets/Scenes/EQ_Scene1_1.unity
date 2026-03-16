@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 2100000, guid: acb3450dbb7316b4683076f5d2525d07, type: 2}
+  m_SkyboxMaterial: {fileID: 2100000, guid: 2aada919c2c68b143a384abb71d765f8, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -276,7 +276,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: b845ac1ab78fed94695d2e86213a854a, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 31a9c24c927b6234cb669dd83ad3731c, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -947,7 +947,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 28c1180adaf683849a221075dbe4e1b6, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 8dfaa6435f9d3a94caa0f84a7f77bbdd, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -1755,7 +1755,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: -46, y: 60.8}
+  m_AnchoredPosition: {x: -46, y: 67.7}
   m_SizeDelta: {x: 160.4642, y: 161.9522}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2018306057
@@ -1772,13 +1772,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   displayImage: {fileID: 174092533}
   images:
-  - {fileID: 21300000, guid: b845ac1ab78fed94695d2e86213a854a, type: 3}
-  - {fileID: 21300000, guid: d9e52f6d37590cc4ca7b90cbe24245b9, type: 3}
-  - {fileID: 21300000, guid: 25685d014edb23249a58ff7a2f42d814, type: 3}
-  - {fileID: 21300000, guid: 24908a0d02a1a644cbf101352dc6d06f, type: 3}
-  - {fileID: 21300000, guid: 22ed34a9e6dcb17478ec01610ba8d0aa, type: 3}
-  - {fileID: 21300000, guid: 02fad7d17a07ded46bc971f2da510a3f, type: 3}
-  - {fileID: 21300000, guid: ad6e627cb2f1bd94dbb3a10a79ec45e4, type: 3}
+  - {fileID: 21300000, guid: 31a9c24c927b6234cb669dd83ad3731c, type: 3}
+  - {fileID: 21300000, guid: 288432bc39f20dd4495f1ea9b4c09263, type: 3}
+  - {fileID: 21300000, guid: efaf56bbdfc56684abdd70a5a4a401d9, type: 3}
+  - {fileID: 21300000, guid: 141a17e33dd3df048a409ebd97df5ef0, type: 3}
+  - {fileID: 21300000, guid: 30abfc061dc76cf4694f85f6ca8a06c1, type: 3}
+  - {fileID: 21300000, guid: 84158f3c1cec8d74e867067829bb82c2, type: 3}
+  - {fileID: 21300000, guid: 38ed75a4a16b6ae4bac7980f67331c3b, type: 3}
+  - {fileID: 21300000, guid: 78a55e5cc5db2a04c8cc19017d5eb100, type: 3}
+  - {fileID: 21300000, guid: 552ff0583a705cc4983f3877e2033ef8, type: 3}
+  - {fileID: 21300000, guid: 14b8a1596e61636429f029aa87434878, type: 3}
 --- !u!114 &2018306058
 MonoBehaviour:
   m_ObjectHideFlags: 0
