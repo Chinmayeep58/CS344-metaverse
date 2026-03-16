@@ -20,7 +20,7 @@ export const connectDB = async () => {
         console.log("✓ PostgreSQL connected successfully");
         client.release();
     } catch (error) {
-        console.error("✗ PostgreSQL connection error:", error);
+        console.error("PostgreSQL connection error:", error);
         throw error;
     }
 };

@@ -1,16 +1,20 @@
 import { Router } from "express";
 import {
-    createNewStudent,
     getStudent,
     getTeacherStudents,
+    joinStudentWithTeacherCode,
+    updateStudentScore,
 } from "../controllers/student.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 
 const router = Router();
 
+// Public route - student joins with teacher code
+router.post("/join", joinStudentWithTeacherCode);
+
 // All routes require authentication
-router.post("/", authenticateToken, createNewStudent);
+router.post("/update-score", authenticateToken, updateStudentScore);
 router.get("/my-students", authenticateToken, getTeacherStudents);
-router.get("/:id", authenticateToken, getStudent);
+router.get("/get-student/:id", authenticateToken, getStudent);
 
 export default router;

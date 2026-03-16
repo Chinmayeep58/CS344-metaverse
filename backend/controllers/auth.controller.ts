@@ -38,6 +38,7 @@ export const signup = async (req: any, res: any): Promise<void> => {
                 email: user.email,
                 fullName: user.full_name,
                 walletAddress: user.wallet_address,
+                teacherCode: user.teacher_code,
             },
         });
     } catch (error: any) {
@@ -89,6 +90,7 @@ export const login = async (req: any, res: any): Promise<void> => {
                 email: user.email,
                 fullName: user.full_name,
                 walletAddress: user.wallet_address,
+                teacherCode: user.teacher_code,
             },
         });
     } catch (error: any) {
@@ -110,6 +112,7 @@ export const getProfile = async (req: any, res: any): Promise<void> => {
                 email: user.email,
                 fullName: user.full_name,
                 walletAddress: user.wallet_address,
+                teacherCode: user.teacher_code,
             },
         });
     } catch (error: any) {

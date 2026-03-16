@@ -1,20 +1,19 @@
 import axios from "axios";
 import dotenv from "dotenv";
-import * as fs from "fs";
-import * as path from "path";
 
 dotenv.config();
 
-// Configuration
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000/api";
-const DEPLOYER_WALLET = "0x63A22B04addD5E8fd248bf10D5c7D48233957050"; // From deployments.json
+const DEPLOYER_WALLET = "0x63A22B04addD5E8fd248bf10D5c7D48233957050";
 
-// Test data
 let authToken: string;
+let teacherId: number;
+let teacherCode: string;
+
 let studentId: number;
+let studentEmail: string;
 let certificateTokenId: number;
 
-// Colors for console output
 const colors = {
     reset: "\x1b[0m",
     green: "\x1b[32m",
@@ -44,12 +43,34 @@ function logWarning(message: string) {
     log(`⚠ ${message}`, colors.yellow);
 }
 
-// Test 1: Health Check
+async function expectStatus(
+    title: string,
+    fn: () => Promise<any>,
+    expectedStatus: number,
+): Promise<boolean> {
+    try {
+        await fn();
+        logError(
+            `${title}: expected status ${expectedStatus}, but request succeeded`,
+        );
+        return false;
+    } catch (error: any) {
+        const actual = error?.response?.status;
+        if (actual === expectedStatus) {
+            logSuccess(`${title}: got expected ${expectedStatus}`);
+            return true;
+        }
+        logError(
+            `${title}: expected ${expectedStatus}, got ${actual || "unknown"}`,
+        );
+        return false;
+    }
+}
+
 async function testHealthCheck() {
     try {
         logInfo("Test 1: Health Check");
         const response = await axios.get("http://localhost:3000/health");
-
         if (response.status === 200 && response.data.status === "OK") {
             logSuccess("Health check passed");
             return true;
@@ -61,10 +82,9 @@ async function testHealthCheck() {
     }
 }
 
-// Test 2: User Signup
 async function testSignup() {
     try {
-        logInfo("\nTest 2: User Signup");
+        logInfo("\nTest 2: Teacher Signup");
         const timestamp = Date.now();
         const response = await axios.post(`${BASE_URL}/auth/signup`, {
             walletAddress: DEPLOYER_WALLET,
@@ -73,19 +93,22 @@ async function testSignup() {
             password: "Test@123456",
         });
 
-        if (response.status === 201 && response.data.token) {
+        if (
+            response.status === 201 &&
+            response.data.token &&
+            response.data.user
+        ) {
             authToken = response.data.token;
+            teacherId = response.data.user.id;
+            teacherCode = response.data.user.teacherCode;
             logSuccess("Signup successful");
-            logInfo(`Token: ${authToken.substring(0, 20)}...`);
-            logInfo(`User ID: ${response.data.user.id}`);
+            logInfo(`Teacher ID: ${teacherId}`);
+            logInfo(`Teacher Code: ${teacherCode}`);
             return true;
         }
+
         throw new Error("Signup failed");
     } catch (error: any) {
-        if (error.response?.status === 409) {
-            logWarning("User already exists, attempting login instead");
-            return await testLoginExisting();
-        }
         logError(
             `Signup failed: ${error.response?.data?.message || error.message}`,
         );
@@ -93,54 +116,19 @@ async function testSignup() {
     }
 }
 
-// Test 2b: Login with existing user
-async function testLoginExisting() {
-    try {
-        const response = await axios.post(`${BASE_URL}/auth/login`, {
-            email: `teacher${Date.now() - 10000}@test.com`,
-            password: "Test@123456",
-        });
-
-        if (response.status === 200 && response.data.token) {
-            authToken = response.data.token;
-            logSuccess("Login successful with existing user");
-            return true;
-        }
-
-        // If this specific user doesn't exist, create a new one
-        const timestamp = Date.now();
-        const signupResponse = await axios.post(`${BASE_URL}/auth/signup`, {
-            walletAddress: DEPLOYER_WALLET,
-            email: `teacher${timestamp}@test.com`,
-            fullName: "Test Teacher",
-            password: "Test@123456",
-        });
-        authToken = signupResponse.data.token;
-        logSuccess("Created new user and logged in");
-        return true;
-    } catch (error: any) {
-        logError(
-            `Login failed: ${error.response?.data?.message || error.message}`,
-        );
-        return false;
-    }
-}
-
-// Test 3: Get Profile
-async function testGetProfile() {
+async function testProfile() {
     try {
         logInfo("\nTest 3: Get Profile");
         const response = await axios.get(`${BASE_URL}/auth/profile`, {
             headers: { Authorization: `Bearer ${authToken}` },
         });
 
-        if (response.status === 200 && response.data.user) {
-            logSuccess("Profile retrieved successfully");
-            logInfo(`Email: ${response.data.user.email}`);
-            logInfo(`Wallet: ${response.data.user.walletAddress}`);
+        if (response.status === 200 && response.data.user?.teacherCode) {
+            logSuccess("Profile retrieved with teacherCode");
             return true;
         }
-        throw new Error("Get profile failed");
+
+        throw new Error("Profile response missing teacherCode");
     } catch (error: any) {
         logError(
             `Get profile failed: ${
@@ -151,35 +139,46 @@ async function testGetProfile() {
     }
 }
 
-// Test 4: Create Student
-async function testCreateStudent() {
-    try {
-        logInfo("\nTest 4: Create Student");
-        const timestamp = Date.now();
-        const response = await axios.post(
-            `${BASE_URL}/students`,
-            {
-                full_name: `John Doe ${timestamp}`,
-                email: `student${timestamp}@test.com`,
-                exam_score: 85,
-            },
-            {
-                headers: { Authorization: `Bearer ${authToken}` },
-            },
-        );
+async function testJoinInvalidTeacherCode() {
+    logInfo("\nTest 4: Join Student (invalid teacher_code)");
+    return expectStatus(
+        "Join with invalid teacher_code",
+        () =>
+            axios.post(`${BASE_URL}/students/join`, {
+                teacher_code: "TEACH-XXXX",
+                name: "Invalid Join",
+                email: `invalid-${Date.now()}@test.com`,
+            }),
+        404,
+    );
+}
 
-        if (response.status === 201 && response.data.data) {
-            studentId = response.data.data.id;
-            logSuccess("Student created successfully");
+async function testJoinStudent() {
+    try {
+        logInfo("\nTest 5: Join Student with teacher_code");
+        const timestamp = Date.now();
+        studentEmail = `student${timestamp}@test.com`;
+
+        const response = await axios.post(`${BASE_URL}/students/join`, {
+            teacher_code: teacherCode,
+            name: `John Doe ${timestamp}`,
+            email: studentEmail,
+        });
+
+        if (response.status === 201 && response.data.student_id) {
+            studentId = response.data.student_id;
+            if (Number(response.data.teacher_id) !== Number(teacherId)) {
+                throw new Error("teacher_id mismatch in join response");
+            }
+            logSuccess("Student joined successfully");
             logInfo(`Student ID: ${studentId}`);
-            logInfo(`Name: ${response.data.data.full_name}`);
-            logInfo(`Score: ${response.data.data.exam_score}`);
             return true;
         }
-        throw new Error("Create student failed");
+
+        throw new Error("Join student failed");
     } catch (error: any) {
         logError(
-            `Create student failed: ${
+            `Join student failed: ${
                 error.response?.data?.message || error.message
             }`,
         );
@@ -187,19 +186,35 @@ async function testCreateStudent() {
     }
 }
 
-// Test 5: Get Student
+async function testJoinDuplicateEmail() {
+    logInfo("\nTest 6: Join Student duplicate email (same teacher)");
+    return expectStatus(
+        "Duplicate student email for same teacher",
+        () =>
+            axios.post(`${BASE_URL}/students/join`, {
+                teacher_code: teacherCode,
+                name: "Duplicate Student",
+                email: studentEmail,
+            }),
+        409,
+    );
+}
+
 async function testGetStudent() {
     try {
-        logInfo("\nTest 5: Get Student");
-        const response = await axios.get(`${BASE_URL}/students/${studentId}`, {
-            headers: { Authorization: `Bearer ${authToken}` },
-        });
+        logInfo("\nTest 7: Get Student by ID");
+        const response = await axios.get(
+            `${BASE_URL}/students/get-student/${studentId}`,
+            {
+                headers: { Authorization: `Bearer ${authToken}` },
+            },
+        );
 
-        if (response.status === 200 && response.data.data) {
-            logSuccess("Student retrieved successfully");
-            logInfo(`Name: ${response.data.data.full_name}`);
+        if (response.status === 200 && response.data.data?.id === studentId) {
+            logSuccess("Student fetched successfully");
             return true;
         }
+
         throw new Error("Get student failed");
     } catch (error: any) {
         logError(
@@ -211,18 +226,18 @@ async function testGetStudent() {
     }
 }
 
-// Test 6: Get Teacher's Students
 async function testGetTeacherStudents() {
     try {
-        logInfo("\nTest 6: Get Teacher's Students");
+        logInfo("\nTest 8: Get Teacher Students");
         const response = await axios.get(`${BASE_URL}/students/my-students`, {
             headers: { Authorization: `Bearer ${authToken}` },
         });
 
         if (response.status === 200 && Array.isArray(response.data.data)) {
-            logSuccess(`Retrieved ${response.data.data.length} students`);
+            logSuccess(`Retrieved ${response.data.data.length} student(s)`);
             return true;
         }
+
         throw new Error("Get teacher students failed");
     } catch (error: any) {
         logError(
@@ -234,67 +249,182 @@ async function testGetTeacherStudents() {
     }
 }
 
-// Test 7: Issue Certificate (Blockchain Transaction)
-async function testIssueCertificate() {
+async function updateScore(score: number): Promise<boolean> {
+    const response = await axios.post(
+        `${BASE_URL}/students/update-score`,
+        {
+            student_id: studentId,
+            exam_score: score,
+        },
+        {
+            headers: { Authorization: `Bearer ${authToken}` },
+        },
+    );
+
+    return response.status === 200;
+}
+
+async function testUpdateScoreEdgeInvalid() {
+    logInfo("\nTest 9: Update Score invalid range (101)");
+    return expectStatus(
+        "Update score with 101",
+        () =>
+            axios.post(
+                `${BASE_URL}/students/update-score`,
+                { student_id: studentId, exam_score: 101 },
+                { headers: { Authorization: `Bearer ${authToken}` } },
+            ),
+        400,
+    );
+}
+
+async function testScore70IssueShouldFail() {
     try {
-        logInfo("\nTest 7: Issue Certificate (Blockchain Transaction)");
-        logWarning("⏳ This may take 15-30 seconds on Sepolia testnet...");
+        logInfo("\nTest 10: Score = 70 then issue certificate should fail");
+        await updateScore(70);
+
+        const ok = await expectStatus(
+            "Issue certificate with score 70",
+            () =>
+                axios.post(
+                    `${BASE_URL}/certificates/issue`,
+                    { studentId, teacherId },
+                    {
+                        headers: { Authorization: `Bearer ${authToken}` },
+                        timeout: 30000,
+                    },
+                ),
+            400,
+        );
+
+        return ok;
+    } catch (error: any) {
+        logError(
+            `Score 70 case failed: ${
+                error.response?.data?.message || error.message
+            }`,
+        );
+        return false;
+    }
+}
+
+async function testScore79IssueShouldFail() {
+    try {
+        logInfo("\nTest 11: Score = 79 then issue certificate should fail");
+        await updateScore(79);
+
+        const ok = await expectStatus(
+            "Issue certificate with score 79",
+            () =>
+                axios.post(
+                    `${BASE_URL}/certificates/issue`,
+                    { studentId, teacherId },
+                    {
+                        headers: { Authorization: `Bearer ${authToken}` },
+                        timeout: 30000,
+                    },
+                ),
+            400,
+        );
+
+        return ok;
+    } catch (error: any) {
+        logError(
+            `Score 79 case failed: ${
+                error.response?.data?.message || error.message
+            }`,
+        );
+        return false;
+    }
+}
+
+async function testScore80IssueShouldPass() {
+    try {
+        logInfo("\nTest 12: Score = 80 then issue certificate should pass");
+        await updateScore(80);
+        logWarning("⏳ Blockchain tx may take 15-30 seconds...");
 
         const response = await axios.post(
             `${BASE_URL}/certificates/issue`,
-            {
-                studentId: studentId,
-            },
+            { studentId, teacherId },
             {
                 headers: { Authorization: `Bearer ${authToken}` },
-                timeout: 60000, // 60 second timeout
+                timeout: 90000,
             },
         );
 
-        if (response.status === 201 && response.data.data) {
+        if (
+            response.status === 201 &&
+            response.data.data?.tokenId !== undefined
+        ) {
             certificateTokenId = response.data.data.tokenId;
-            logSuccess("✨ Certificate issued successfully!");
-            logInfo(`Token ID: ${response.data.data.tokenId}`);
-            logInfo(`Transaction Hash: ${response.data.data.txHash}`);
-            logInfo(`IPFS Hash: ${response.data.data.ipfsHash}`);
-            log(
-                `🔗 View on Etherscan: https://sepolia.etherscan.io/tx/${response.data.data.txHash}`,
-                colors.cyan,
-            );
+            logSuccess("Certificate issued at boundary score 80");
+            logInfo(`Token ID: ${certificateTokenId}`);
             return true;
         }
-        throw new Error("Issue certificate failed");
+
+        throw new Error("Issue at score 80 failed");
     } catch (error: any) {
         logError(
-            `Issue certificate failed: ${
+            `Score 80 issuance failed: ${
                 error.response?.data?.message || error.message
             }`,
         );
         if (error.code === "ECONNABORTED") {
-            logWarning(
-                "Request timed out. The transaction might still be processing.",
-            );
+            logWarning("Timeout occurred; transaction may still be pending.");
         }
         return false;
     }
 }
 
-// Test 8: Get Certificate from Database
-async function testGetCertificate() {
+async function testScoreAbove80Update() {
     try {
-        logInfo("\nTest 8: Get Certificate from Database");
+        logInfo("\nTest 13: Score > 80 (95) update check");
+        const ok = await updateScore(95);
+        if (!ok) throw new Error("Score update failed");
+
+        const response = await axios.get(
+            `${BASE_URL}/students/get-student/${studentId}`,
+            {
+                headers: { Authorization: `Bearer ${authToken}` },
+            },
+        );
+
+        if (
+            response.status === 200 &&
+            Number(response.data.data?.exam_score) === 95
+        ) {
+            logSuccess("Score above 80 persisted successfully");
+            return true;
+        }
+
+        throw new Error("Stored score mismatch for >80 case");
+    } catch (error: any) {
+        logError(
+            `Score >80 case failed: ${
+                error.response?.data?.message || error.message
+            }`,
+        );
+        return false;
+    }
+}
+
+async function testGetCertificateByToken() {
+    try {
+        logInfo("\nTest 14: Get Certificate by Token");
         const response = await axios.get(
             `${BASE_URL}/certificates/token/${certificateTokenId}`,
         );
 
-        if (response.status === 200 && response.data.data) {
-            logSuccess("Certificate retrieved from database");
-            logInfo(`Token ID: ${response.data.data.token_id}`);
-            logInfo(`TX Hash: ${response.data.data.tx_hash}`);
-            logInfo(`Revoked: ${response.data.data.revoked}`);
+        if (
+            response.status === 200 &&
+            response.data.data?.token_id !== undefined
+        ) {
+            logSuccess("Certificate found in DB");
             return true;
         }
-        throw new Error("Get certificate failed");
+
+        throw new Error("Certificate lookup failed");
     } catch (error: any) {
         logError(
             `Get certificate failed: ${
@@ -305,55 +435,31 @@ async function testGetCertificate() {
     }
 }
 
-// Test 9: Verify Certificate on Blockchain
 async function testVerifyCertificate() {
     try {
-        logInfo("\nTest 9: Verify Certificate on Blockchain");
-        logWarning("🔍 Checking blockchain...");
-
+        logInfo("\nTest 15: Verify Certificate on chain");
         const response = await axios.get(
             `${BASE_URL}/certificates/verify/${certificateTokenId}`,
-            {
-                timeout: 30000,
-            },
+            { timeout: 30000 },
         );
 
         if (response.status === 200 && response.data.data) {
-            const { isValid, certificate } = response.data.data;
-            if (isValid) {
-                logSuccess("✅ Certificate verified on blockchain!");
-                logInfo(`Student: ${certificate.studentName}`);
-                logInfo(`Email: ${certificate.studentEmail}`);
-                logInfo(`Score: ${certificate.examScore}`);
-                logInfo(
-                    `Issued: ${new Date(
-                        certificate.issueDate * 1000,
-                    ).toLocaleString()}`,
-                );
-                logInfo(`Revoked: ${certificate.revoked}`);
-                return true;
-            } else {
-                logWarning(
-                    "Certificate exists but is not valid (possibly revoked)",
-                );
-                return true;
-            }
+            logSuccess("Verification response received");
+            return true;
         }
-        throw new Error("Verify certificate failed");
+
+        throw new Error("Verify failed");
     } catch (error: any) {
         logError(
-            `Verify certificate failed: ${
-                error.response?.data?.message || error.message
-            }`,
+            `Verify failed: ${error.response?.data?.message || error.message}`,
         );
         return false;
     }
 }
 
-// Test 10: Get Student's Certificates
 async function testGetStudentCertificates() {
     try {
-        logInfo("\nTest 10: Get Student's Certificates");
+        logInfo("\nTest 16: Get Student Certificates");
         const response = await axios.get(
             `${BASE_URL}/certificates/student/${studentId}`,
             {
@@ -363,10 +469,11 @@ async function testGetStudentCertificates() {
 
         if (response.status === 200 && Array.isArray(response.data.data)) {
             logSuccess(
-                `📜 Student has ${response.data.data.length} certificate(s)`,
+                `Student has ${response.data.data.length} certificate(s)`,
             );
             return true;
         }
+
         throw new Error("Get student certificates failed");
     } catch (error: any) {
         logError(
@@ -378,29 +485,31 @@ async function testGetStudentCertificates() {
     }
 }
 
-// Main test runner
 async function runAllTests() {
-    console.log("\n" + "=".repeat(70));
-    log("🎓 VR DISASTER TRAINING METAVERSE - INTEGRATION TESTS", colors.cyan);
-    console.log("=".repeat(70));
+    console.log("\n" + "=".repeat(72));
+    log(
+        "🎓 VR DISASTER TRAINING METAVERSE - UPDATED INTEGRATION TESTS",
+        colors.cyan,
+    );
+    console.log("=".repeat(72));
 
-    logInfo(`\n📡 Base URL: ${BASE_URL}`);
-    logInfo(`👤 Deployer Wallet: ${DEPLOYER_WALLET}`);
-    logInfo(`📄 Contract: ${process.env.CONTRACT_ADDRESS}`);
-    logInfo(`🌐 Network: Sepolia Testnet`);
-    console.log("=".repeat(70));
-
-    const results = {
-        passed: 0,
-        failed: 0,
-        total: 0,
-    };
+    const results = { passed: 0, failed: 0, total: 0 };
 
     const tests = [
         { name: "Health Check", fn: testHealthCheck, critical: true },
-        { name: "User Signup/Login", fn: testSignup, critical: true },
-        { name: "Get Profile", fn: testGetProfile, critical: false },
-        { name: "Create Student", fn: testCreateStudent, critical: true },
+        { name: "Teacher Signup", fn: testSignup, critical: true },
+        { name: "Get Profile", fn: testProfile, critical: true },
+        {
+            name: "Join Invalid teacher_code",
+            fn: testJoinInvalidTeacherCode,
+            critical: false,
+        },
+        { name: "Join Student", fn: testJoinStudent, critical: true },
+        {
+            name: "Join Duplicate Email",
+            fn: testJoinDuplicateEmail,
+            critical: false,
+        },
         { name: "Get Student", fn: testGetStudent, critical: false },
         {
             name: "Get Teacher Students",
@@ -408,17 +517,37 @@ async function runAllTests() {
             critical: false,
         },
         {
-            name: "Issue Certificate (Blockchain)",
-            fn: testIssueCertificate,
-            critical: true,
-        },
-        {
-            name: "Get Certificate (Database)",
-            fn: testGetCertificate,
+            name: "Update Score Invalid",
+            fn: testUpdateScoreEdgeInvalid,
             critical: false,
         },
         {
-            name: "Verify Certificate (Blockchain)",
+            name: "Issue with 70 should fail",
+            fn: testScore70IssueShouldFail,
+            critical: true,
+        },
+        {
+            name: "Issue with 79 should fail",
+            fn: testScore79IssueShouldFail,
+            critical: true,
+        },
+        {
+            name: "Issue with 80 should pass",
+            fn: testScore80IssueShouldPass,
+            critical: true,
+        },
+        {
+            name: "Score >80 update",
+            fn: testScoreAbove80Update,
+            critical: false,
+        },
+        {
+            name: "Get Certificate",
+            fn: testGetCertificateByToken,
+            critical: false,
+        },
+        {
+            name: "Verify Certificate",
             fn: testVerifyCertificate,
             critical: false,
         },
@@ -432,6 +561,7 @@ async function runAllTests() {
     for (const test of tests) {
         results.total++;
         const success = await test.fn();
+
         if (success) {
             results.passed++;
         } else {
@@ -443,37 +573,33 @@ async function runAllTests() {
                 break;
             }
         }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        await new Promise((resolve) => setTimeout(resolve, 900));
     }
 
-    // Summary
-    console.log("\n" + "=".repeat(70));
+    console.log("\n" + "=".repeat(72));
     log("📊 TEST SUMMARY", colors.cyan);
-    console.log("=".repeat(70));
-    logInfo(`Total Tests: ${results.total}`);
+    console.log("=".repeat(72));
+    logInfo(`Base URL: ${BASE_URL}`);
+    logInfo(`Teacher Wallet: ${DEPLOYER_WALLET}`);
+    logInfo(`Teacher ID: ${teacherId || "N/A"}`);
+    logInfo(`Teacher Code: ${teacherCode || "N/A"}`);
+    logInfo(`Total: ${results.total}`);
     logSuccess(`Passed: ${results.passed}`);
     if (results.failed > 0) {
         logError(`Failed: ${results.failed}`);
     }
 
     const successRate = ((results.passed / results.total) * 100).toFixed(2);
-    if (results.failed === 0) {
-        log(
-            `\n🎉 ALL TESTS PASSED! Success rate: ${successRate}%`,
-            colors.green,
-        );
-    } else {
-        log(
-            `\n⚠️  Some tests failed. Success rate: ${successRate}%`,
-            colors.yellow,
-        );
-    }
-    console.log("=".repeat(70) + "\n");
+    log(
+        `Success Rate: ${successRate}%`,
+        results.failed ? colors.yellow : colors.green,
+    );
+    console.log("=".repeat(72) + "\n");
 
     process.exit(results.failed > 0 ? 1 : 0);
 }
 
-// Run tests
 runAllTests().catch((error) => {
     logError(`\n💥 Unexpected error: ${error.message}`);
     process.exit(1);

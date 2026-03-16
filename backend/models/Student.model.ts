@@ -40,6 +40,7 @@ export const dropTableQuery = `
 export const createIndexesQuery = `
   CREATE INDEX IF NOT EXISTS idx_students_email ON students(email);
   CREATE INDEX IF NOT EXISTS idx_students_created_by ON students(created_by);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_students_teacher_email_unique ON students(created_by, email) WHERE email IS NOT NULL;
 `;
 
 // Create student
@@ -77,4 +78,30 @@ export const getAllStudentsByTeacher = async (
   `;
     const result = await pool.query(query, [teacherId]);
     return result.rows;
+};
+
+export const getStudentByEmailAndTeacher = async (
+    email: string,
+    teacherId: number,
+): Promise<Student | undefined> => {
+    const query = `
+    SELECT * FROM students WHERE email = $1 AND created_by = $2;
+    `;
+    const result = await pool.query(query, [email, teacherId]);
+    return result.rows[0];
+};
+
+export const updateStudentExamScore = async (
+    studentId: number,
+    examScore: number,
+): Promise<Student | undefined> => {
+    const query = `
+    UPDATE students
+    SET exam_score = $1,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $2
+    RETURNING *;
+    `;
+    const result = await pool.query(query, [examScore, studentId]);
+    return result.rows[0];
 };
