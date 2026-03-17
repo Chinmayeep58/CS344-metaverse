@@ -1,249 +1,164 @@
-# API Endpoints Documentation
+# API Endpoints Documentation (Updated)
 
-Base URL: `http://localhost:3000`
+Base URL: `http://localhost:3000/api`
 
 ---
 
 ## Authentication Endpoints
 
-### 1. Sign Up
+### 1) Sign Up (Teacher)
 
 **POST** `/auth/signup`
 
-Create a new user account.
-
-**Request Body:**
+**Request Body**
 
 ```json
 {
     "walletAddress": "0x1234567890abcdef...",
-    "email": "user@example.com",
+    "email": "teacher@example.com",
     "fullName": "John Doe",
     "password": "securePassword123"
 }
 ```
 
-**Response (201):**
+**Response (201)**
 
 ```json
 {
     "message": "User created successfully",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token": "eyJhbGciOi...",
     "user": {
         "id": 1,
-        "email": "user@example.com",
+        "email": "teacher@example.com",
         "fullName": "John Doe",
-        "walletAddress": "0x1234567890abcdef..."
+        "walletAddress": "0x1234567890abcdef...",
+        "teacherCode": "TEACH-91FA"
     }
 }
 ```
 
----
-
-### 2. Login
+### 2) Login
 
 **POST** `/auth/login`
 
-Authenticate user and get access token.
-
-**Request Body:**
+**Request Body**
 
 ```json
 {
-    "email": "user@example.com",
+    "email": "teacher@example.com",
     "password": "securePassword123"
 }
 ```
 
-**Response (200):**
+**Response (200)**
 
 ```json
 {
     "message": "Login successful",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token": "eyJhbGciOi...",
     "user": {
         "id": 1,
-        "email": "user@example.com",
+        "email": "teacher@example.com",
         "fullName": "John Doe",
-        "walletAddress": "0x1234567890abcdef..."
+        "walletAddress": "0x1234567890abcdef...",
+        "teacherCode": "TEACH-91FA"
     }
 }
 ```
 
----
+### 3) Get Profile
 
-### 3. Get Profile
+**GET** `/auth/profile` (Protected)
 
-**GET** `/auth/profile`
-
-Get current authenticated user profile.
-
-**Headers:**
+Headers:
 
 ```
 Authorization: Bearer <token>
-```
-
-**Response (200):**
-
-```json
-{
-    "user": {
-        "id": 1,
-        "email": "user@example.com",
-        "fullName": "John Doe",
-        "walletAddress": "0x1234567890abcdef..."
-    }
-}
 ```
 
 ---
 
 ## Student Endpoints
 
-### 4. Create Student
+### 4) Join Student with Teacher Code
 
-**POST** `/students`
+**POST** `/students/join` (Public)
 
-Create a new student record.
-
-**Headers:**
-
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
+**Request Body**
 
 ```json
 {
-    "full_name": "Jane Smith",
-    "email": "jane@example.com",
-    "exam_score": 85
+    "teacher_code": "TEACH-91FA",
+    "name": "Rahul Sharma",
+    "email": "rahul@email.com"
 }
 ```
 
-**Response (201):**
+**Response (201)**
 
 ```json
 {
     "success": true,
-    "message": "Student created successfully",
-    "data": {
-        "id": 1,
-        "full_name": "Jane Smith",
-        "email": "jane@example.com",
-        "exam_score": 85,
-        "created_by": 1,
-        "created_at": "2026-02-14T10:30:00.000Z"
-    }
+    "teacher_wallet": "0x1234567890abcdef...",
+    "teacher_id": 1,
+    "student_id": 42
 }
 ```
 
----
+**Common Errors**
 
-### 5. Get Student by ID
+-   `400`: Missing fields / invalid email
+-   `404`: Invalid teacher code
+-   `409`: Duplicate student email for same teacher
 
-**GET** `/students/:id`
+### 5) Update Student Score
 
-Get specific student details.
+**POST** `/students/update-score` (Protected)
 
-**Headers:**
-
-```
-Authorization: Bearer <token>
-```
-
-**URL Parameters:**
-
--   `id` (number): Student ID
-
-**Response (200):**
+**Request Body**
 
 ```json
 {
-    "success": true,
-    "data": {
-        "id": 1,
-        "full_name": "Jane Smith",
-        "email": "jane@example.com",
-        "exam_score": 85,
-        "created_by": 1,
-        "created_at": "2026-02-14T10:30:00.000Z"
-    }
+    "student_id": 42,
+    "exam_score": 79
 }
 ```
 
----
+**Rules**
 
-### 6. Get My Students
+-   score must be number in `0..100`
+-   only the owning teacher can update score
 
-**GET** `/students/my-students`
+### 6) Get Student by ID
 
-Get all students created by the authenticated teacher.
+**GET** `/students/get-student/:id` (Protected)
 
-**Headers:**
+### 7) Get My Students
 
-```
-Authorization: Bearer <token>
-```
-
-**Response (200):**
-
-```json
-{
-    "success": true,
-    "data": [
-        {
-            "id": 1,
-            "full_name": "Jane Smith",
-            "email": "jane@example.com",
-            "exam_score": 85,
-            "created_by": 1,
-            "created_at": "2026-02-14T10:30:00.000Z"
-        },
-        {
-            "id": 2,
-            "full_name": "John Doe",
-            "email": "john@example.com",
-            "exam_score": 92,
-            "created_by": 1,
-            "created_at": "2026-02-14T11:00:00.000Z"
-        }
-    ]
-}
-```
-
-**Error Responses:**
-
--   `401`: Unauthorized
--   `500`: Internal server error
+**GET** `/students/my-students` (Protected)
 
 ---
 
 ## Certificate Endpoints
 
-### 7. Issue Certificate
+### 8) Issue Certificate
 
-**POST** `/certificates/issue`
+**POST** `/certificates/issue` (Protected)
 
-Issue a blockchain certificate for a student (requires exam score ≥ 70).
+> Certificate is issued only when `exam_score >= 80`.
 
-**Headers:**
-
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
+**Request Body**
 
 ```json
 {
-    "studentId": 1
+    "studentId": 42,
+    "teacherId": 1
 }
 ```
 
-**Response (201):**
+`teacherId` is optional. If provided, it must match student owner. Backend validates teacher ownership.
+
+**Response (201)**
 
 ```json
 {
@@ -251,206 +166,132 @@ Authorization: Bearer <token>
     "message": "Certificate issued successfully",
     "data": {
         "tokenId": 1,
-        "txHash": "0xabc123def456...",
-        "ipfsHash": "QmXyZ789...",
+        "txHash": "0xabc123...",
+        "ipfsHash": "QmXyZ...",
         "certificate": {
             "id": 1,
-            "student_id": 1,
+            "student_id": 42,
             "token_id": 1,
-            "tx_hash": "0xabc123def456...",
-            "ipfs_hash": "QmXyZ789...",
+            "tx_hash": "0xabc123...",
+            "ipfs_hash": "QmXyZ...",
             "issued_by": 1,
-            "issued_at": "2026-02-14T12:00:00.000Z",
-            "revoked": false
-        }
-    }
-}
-```
-
----
-
-### 8. Get Certificate by Token ID
-
-**GET** `/certificates/token/:tokenId`
-
-Get certificate details by blockchain token ID (Public - No auth required).
-
-**URL Parameters:**
-
--   `tokenId` (number): Blockchain token ID
-
-**Response (200):**
-
-```json
-{
-    "success": true,
-    "data": {
-        "id": 1,
-        "student_id": 1,
-        "token_id": 1,
-        "tx_hash": "0xabc123def456...",
-        "ipfs_hash": "QmXyZ789...",
-        "issued_by": 1,
-        "issued_at": "2026-02-14T12:00:00.000Z",
-        "revoked": false,
-        "revoked_at": null
-    }
-}
-```
-
----
-
-### 9. Get Student Certificates
-
-**GET** `/certificates/student/:studentId`
-
-Get all certificates for a specific student.
-
-**Headers:**
-
-```
-Authorization: Bearer <token>
-```
-
-**URL Parameters:**
-
--   `studentId` (number): Student ID
-
-**Response (200):**
-
-```json
-{
-    "success": true,
-    "data": [
-        {
-            "id": 1,
-            "student_id": 1,
-            "token_id": 1,
-            "tx_hash": "0xabc123def456...",
-            "ipfs_hash": "QmXyZ789...",
-            "issued_by": 1,
-            "issued_at": "2026-02-14T12:00:00.000Z",
             "revoked": false,
-            "revoked_at": null
-        }
-    ]
-}
-```
-
-**Error Responses:**
-
--   `401`: Unauthorized
--   `500`: Internal server error
-
----
-
-### 10. Revoke Certificate
-
-**PUT** `/certificates/:certificateId/revoke`
-
-Revoke an issued certificate on blockchain.
-
-**Headers:**
-
-```
-Authorization: Bearer <token>
-```
-
-**URL Parameters:**
-
--   `certificateId` (number): Token ID of the certificate to revoke
-
-**Response (200):**
-
-```json
-{
-    "success": true,
-    "message": "Certificate revoked successfully",
-    "data": {
-        "certificate": {
-            "id": 1,
-            "student_id": 1,
-            "token_id": 1,
-            "tx_hash": "0xabc123def456...",
-            "ipfs_hash": "QmXyZ789...",
-            "issued_by": 1,
-            "issued_at": "2026-02-14T12:00:00.000Z",
-            "revoked": true,
-            "revoked_at": "2026-02-14T13:00:00.000Z"
-        },
-        "txHash": "0xdef789ghi012..."
-    }
-}
-```
-
----
-
-### 11. Verify Certificate
-
-**GET** `/certificates/verify/:tokenId`
-
-Verify certificate authenticity on blockchain (Public - No auth required).
-
-**URL Parameters:**
-
--   `tokenId` (number): Blockchain token ID
-
-**Response (200):**
-
-```json
-{
-    "success": true,
-    "data": {
-        "exists": true,
-        "isRevoked": false,
-        "certificateData": {
-            "tokenId": 1,
-            "studentName": "Jane Smith",
-            "studentEmail": "jane@example.com",
-            "examScore": 85,
-            "issuedAt": 1708862400,
-            "ipfsHash": "QmXyZ789...",
-            "issuer": "0x1234567890abcdef...",
-            "revoked": false
+            "issued_at": "2026-03-16T12:00:00.000Z"
         }
     }
 }
 ```
 
+**Common Errors**
+
+-   `400`: missing studentId, invalid teacherId, or score below 80
+-   `403`: teacher mismatch with student owner
+-   `404`: student not found
+
+### 9) Get Certificate by Token
+
+**GET** `/certificates/token/:tokenId` (Public)
+
+### 10) Get Certificates by Student
+
+**GET** `/certificates/student/:studentId` (Protected)
+
+### 11) Revoke Certificate
+
+**PUT** `/certificates/:certificateId/revoke` (Protected)
+
+### 12) Verify Certificate on Blockchain
+
+**GET** `/certificates/verify/:tokenId` (Public)
+
 ---
 
-## Authentication Notes
+## Auth Requirements
 
-**Protected Routes** require an `Authorization` header:
+Protected endpoints require:
 
 ```
-Authorization: Bearer <your_jwt_token>
+Authorization: Bearer <jwt_token>
 ```
 
-**Public Routes** (No authentication required):
+Public endpoints:
 
+-   `POST /students/join`
 -   `GET /certificates/token/:tokenId`
 -   `GET /certificates/verify/:tokenId`
 
 ---
 
-## Smart Contract Functions (DisasterCertificate.sol)
+## Testing Profiles (Ready to Use)
 
-The backend interacts with these blockchain functions:
+Use these sample profiles for manual API testing in Postman/Insomnia.
 
-1. **issueCertificate** - Mints NFT certificate with metadata
-2. **revokeCertificate** - Marks certificate as revoked on-chain
-3. **getCertificate** - Retrieves certificate data from blockchain
-4. **verifyCertificate** - Checks if certificate exists and is valid
+### Teacher Test Profile
+
+```json
+{
+    "id": 1,
+    "walletAddress": "0x63A22B04addD5E8fd248bf10D5c7D48233957050",
+    "email": "teacher1742148695993@test.com",
+    "fullName": "Test Teacher",
+    "password": "Test@123456",
+    "teacherCode": "TEACH-390D"
+}
+```
+
+> Note: `teacherCode` is auto-generated at signup, so it will be different on every fresh run.
+
+### Student Test Profiles (3-4)
+
+```json
+[
+    {
+        "teacher_code": "TEACH-91FA",
+        "name": "Rahul Sharma",
+        "email": "rahul.sharma@student.com",
+        "exam_score": 70,
+        "expected_certificate": false
+    },
+    {
+        "teacher_code": "TEACH-91FA",
+        "name": "Priya Verma",
+        "email": "priya.verma@student.com",
+        "exam_score": 79,
+        "expected_certificate": false
+    },
+    {
+        "teacher_code": "TEACH-91FA",
+        "name": "Arjun Patil",
+        "email": "arjun.patil@student.com",
+        "exam_score": 80,
+        "expected_certificate": true
+    },
+    {
+        "teacher_code": "TEACH-91FA",
+        "name": "Neha Kulkarni",
+        "email": "neha.kulkarni@student.com",
+        "exam_score": 92,
+        "expected_certificate": true
+    }
+]
+```
+
+### Suggested Test Order
+
+1. Sign up teacher with wallet `0x63A22B04addD5E8fd248bf10D5c7D48233957050`
+2. Login and copy JWT token
+3. Join students using `/students/join`
+4. Update score with `/students/update-score`
+5. Try `/certificates/issue` and verify:
+    - score 70/79 → should fail
+    - score 80/92 → should pass
 
 ---
 
 ## Important Notes
 
-1. **Exam Score Requirement**: Certificates can only be issued for students with exam_score ≥ 70
-2. **JWT Token**: Save the token from login/signup and include it in Authorization header for protected routes
-3. **Student Data**: Students must have `full_name`, `email`, and `exam_score` before issuing certificates
-4. **IPFS**: Certificate metadata is automatically uploaded to IPFS during issuance
-5. **Blockchain**: All certificate operations are recorded on the blockchain with transaction hashes
-
----
+1. Certificate score threshold is **80** (not 70).
+2. Student onboarding is through `/students/join` using `teacher_code`.
+3. Score update is separate via `/students/update-score`.
+4. Minting logic is unchanged in smart contract (`_safeMint(msg.sender, tokenId)`).
+5. Certificate metadata is uploaded to IPFS automatically during issuance.

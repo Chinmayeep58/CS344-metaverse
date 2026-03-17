@@ -1,5 +1,9 @@
 import pool from "../config/db";
-import { createUsersTable, createUserIndexes } from "../models/User.model";
+import {
+    createUsersTable,
+    createUserIndexes,
+    ensureTeacherCodeColumnQuery,
+} from "../models/User.model";
 import {
     createTableQuery as createStudentsTable,
     createIndexesQuery as createStudentIndexes,
@@ -15,6 +19,7 @@ export const runMigrations = async () => {
 
         // Create users table and indexes
         await pool.query(createUsersTable);
+        await pool.query(ensureTeacherCodeColumnQuery);
         await pool.query(createUserIndexes);
         console.log("✓ Users table created");
 

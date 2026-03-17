@@ -70,7 +70,7 @@ contract DisasterCertificate is ERC721, ERC721URIStorage, Ownable {
         uint256 examScore,
         string memory ipfsHash
     ) external onlyTeacher returns (uint256) {
-        require(examScore >= 70, "Score must be at least 70 to pass");
+        require(examScore >= 80, "Score must be at least 80 to pass");
         require(bytes(ipfsHash).length > 0, "IPFS hash required");
 
         uint256 tokenId = _tokenIdCounter;

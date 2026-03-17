@@ -15,7 +15,7 @@ import {
 
 export const issueCertificate = async (req: Request, res: Response) => {
     try {
-        const { studentId } = req.body;
+        const { studentId, teacherId } = req.body;
         const userId = (req as any).user?.id;
 
         if (!studentId) {
@@ -45,10 +45,31 @@ export const issueCertificate = async (req: Request, res: Response) => {
             });
         }
 
-        if (student.exam_score < 70) {
+        if (student.exam_score < 80) {
             return res.status(400).json({
                 success: false,
-                message: "Student exam score must be at least 70",
+                message: "Student exam score must be at least 80",
+            });
+        }
+
+        if (teacherId !== undefined && !Number.isFinite(Number(teacherId))) {
+            return res.status(400).json({
+                success: false,
+                message: "teacherId must be a valid number",
+            });
+        }
+
+        const resolvedTeacherId = Number(
+            userId ?? teacherId ?? student.created_by ?? 1,
+        );
+
+        if (
+            student.created_by &&
+            resolvedTeacherId !== Number(student.created_by)
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "Teacher ID does not match student owner",
             });
         }
 
@@ -85,7 +106,7 @@ export const issueCertificate = async (req: Request, res: Response) => {
             token_id: tokenId,
             tx_hash: txHash,
             ipfs_hash: ipfsHash,
-            issued_by: userId || student.created_by || 1,
+            issued_by: resolvedTeacherId,
         });
 
         return res.status(201).json({
