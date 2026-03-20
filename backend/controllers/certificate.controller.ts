@@ -12,6 +12,7 @@ import {
     revokeCertificateOnChain,
     verifyCertificateOnChain,
 } from "../services/blockchain.service";
+import { sendCertificateIssuedEmail } from "../services/mail.service";
 
 export const issueCertificate = async (req: Request, res: Response) => {
     try {
@@ -109,6 +110,21 @@ export const issueCertificate = async (req: Request, res: Response) => {
             issued_by: resolvedTeacherId,
         });
 
+        let emailSent = false;
+        try {
+            emailSent = await sendCertificateIssuedEmail({
+                recipientEmail: student.email,
+                studentName: student.full_name,
+                examScore: student.exam_score,
+                tokenId,
+                txHash,
+                ipfsHash,
+                issueDate: new Date(certificate.issued_at).toISOString(),
+            });
+        } catch (emailError) {
+            console.error("Certificate issued, but email sending failed:", emailError);
+        }
+
         return res.status(201).json({
             success: true,
             message: "Certificate issued successfully",
@@ -116,6 +132,7 @@ export const issueCertificate = async (req: Request, res: Response) => {
                 tokenId,
                 txHash,
                 ipfsHash,
+                emailSent,
                 certificate,
             },
         });
