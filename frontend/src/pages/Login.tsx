@@ -28,7 +28,7 @@ export default function Login() {
 
         try {
             setLoading(true);
-            const response = await login({ email, password });
+            const response = await login({ email: email.trim(), password });
             setSession(response.token, response.user);
             toast({ title: "Login successful" });
             const redirectTo = (

@@ -4,6 +4,227 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000/api";
+
+const TEACHER = {
+    fullName: "Samadhan Subhash Erande",
+    email: "erandesamadhan2003@gmail.com",
+    walletAddress: "0xcA1B4c790D5B3F7A27817237F03936c43474AC39",
+    teacherCode: "TEACH-CC24",
+};
+
+const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD;
+
+const STUDENTS = [
+    {
+        name: "Student One",
+        email: `student.one.${Date.now()}@test.com`,
+    },
+    {
+        name: "Student Two",
+        email: `student.two.${Date.now()}@test.com`,
+    },
+];
+
+let authToken = "";
+let teacherId = 0;
+
+const colors = {
+    reset: "\x1b[0m",
+    green: "\x1b[32m",
+    red: "\x1b[31m",
+    blue: "\x1b[34m",
+    cyan: "\x1b[36m",
+    yellow: "\x1b[33m",
+};
+
+function log(message: string, color: string = colors.reset) {
+    console.log(`${color}${message}${colors.reset}`);
+}
+
+function logSuccess(message: string) {
+    log(`✓ ${message}`, colors.green);
+}
+
+function logError(message: string) {
+    log(`✗ ${message}`, colors.red);
+}
+
+function logInfo(message: string) {
+    log(`ℹ ${message}`, colors.blue);
+}
+
+function logWarning(message: string) {
+    log(`⚠ ${message}`, colors.yellow);
+}
+
+async function testHealthCheck() {
+    logInfo("Test 1: Health Check");
+    const response = await axios.get("http://localhost:3000/health");
+
+    if (response.status !== 200 || response.data.status !== "OK") {
+        throw new Error("Health check failed");
+    }
+
+    logSuccess("Health check passed");
+}
+
+async function loginTeacher() {
+    if (!TEACHER_PASSWORD) {
+        throw new Error(
+            "Missing TEACHER_PASSWORD in .env. Add TEACHER_PASSWORD for teacher login.",
+        );
+    }
+
+    logInfo("\nTest 2: Teacher Login");
+
+    const response = await axios.post(`${BASE_URL}/auth/login`, {
+        email: TEACHER.email,
+        password: TEACHER_PASSWORD,
+    });
+
+    if (
+        response.status !== 200 ||
+        !response.data?.token ||
+        !response.data?.user
+    ) {
+        throw new Error("Teacher login failed");
+    }
+
+    authToken = response.data.token;
+    teacherId = Number(response.data.user.id);
+
+    if (!teacherId) {
+        throw new Error("Teacher ID is missing from login response");
+    }
+
+    if (response.data.user.teacherCode !== TEACHER.teacherCode) {
+        logWarning(
+            `Teacher code mismatch. Expected ${TEACHER.teacherCode}, got ${response.data.user.teacherCode}`,
+        );
+    }
+
+    logSuccess(`Logged in as ${TEACHER.fullName}`);
+    logInfo(`Teacher ID: ${teacherId}`);
+}
+
+async function joinStudent(name: string, email: string): Promise<number> {
+    const response = await axios.post(`${BASE_URL}/students/join`, {
+        teacher_code: TEACHER.teacherCode,
+        name,
+        email,
+    });
+
+    if (response.status !== 201 || !response.data?.student_id) {
+        throw new Error(`Failed to join student: ${name}`);
+    }
+
+    const joinedTeacherId = Number(response.data.teacher_id);
+    if (joinedTeacherId !== teacherId) {
+        throw new Error(
+            `Teacher mismatch while joining ${name}. Expected ${teacherId}, got ${joinedTeacherId}`,
+        );
+    }
+
+    return Number(response.data.student_id);
+}
+
+async function updateScore(studentId: number, score: number) {
+    const response = await axios.post(
+        `${BASE_URL}/students/update-score`,
+        {
+            student_id: studentId,
+            exam_score: score,
+        },
+        {
+            headers: { Authorization: `Bearer ${authToken}` },
+        },
+    );
+
+    if (response.status !== 200) {
+        throw new Error(`Failed to update score for student ${studentId}`);
+    }
+}
+
+async function issueCertificate(studentId: number): Promise<number> {
+    const response = await axios.post(
+        `${BASE_URL}/certificates/issue`,
+        {
+            studentId,
+            teacherId,
+        },
+        {
+            headers: { Authorization: `Bearer ${authToken}` },
+            timeout: 90000,
+        },
+    );
+
+    const tokenId = response.data?.data?.tokenId;
+    if (response.status !== 201 || tokenId === undefined || tokenId === null) {
+        throw new Error(`Failed to issue certificate for student ${studentId}`);
+    }
+
+    return Number(tokenId);
+}
+
+async function addTwoStudentsAndGenerateCertificates() {
+    logInfo("\nTest 3: Add 2 students and generate certificates");
+
+    for (const student of STUDENTS) {
+        logInfo(`\nProcessing ${student.name} (${student.email})`);
+
+        const studentId = await joinStudent(student.name, student.email);
+        logSuccess(`Student joined. ID: ${studentId}`);
+
+        await updateScore(studentId, 80);
+        logSuccess(`Score updated to 80 for student ID ${studentId}`);
+
+        logWarning(
+            "⏳ Issuing certificate on blockchain (can take 15-30 seconds)...",
+        );
+        const tokenId = await issueCertificate(studentId);
+        logSuccess(
+            `Certificate issued for student ID ${studentId}. Token ID: ${tokenId}`,
+        );
+    }
+}
+
+async function run() {
+    console.log("\n" + "=".repeat(72));
+    log(
+        "🎓 TARGETED FLOW: LOGIN + ADD 2 STUDENTS + ISSUE CERTIFICATES",
+        colors.cyan,
+    );
+    console.log("=".repeat(72));
+
+    logInfo(`Base URL: ${BASE_URL}`);
+    logInfo(`Teacher: ${TEACHER.fullName}`);
+    logInfo(`Email: ${TEACHER.email}`);
+    logInfo(`Wallet: ${TEACHER.walletAddress}`);
+    logInfo(`Teacher Code: ${TEACHER.teacherCode}`);
+
+    await testHealthCheck();
+    await loginTeacher();
+    await addTwoStudentsAndGenerateCertificates();
+
+    console.log("\n" + "=".repeat(72));
+    logSuccess("✅ Completed: 2 students added and certificates generated.");
+    console.log("=".repeat(72) + "\n");
+}
+
+run().catch((error: any) => {
+    logError(
+        `\n💥 Flow failed: ${error.response?.data?.message || error.message}`,
+    );
+    process.exit(1);
+});
+
+/*
+import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000/api";
 const DEPLOYER_WALLET = "0x63A22B04addD5E8fd248bf10D5c7D48233957050";
 
 let authToken: string;
@@ -604,3 +825,4 @@ runAllTests().catch((error) => {
     logError(`\n💥 Unexpected error: ${error.message}`);
     process.exit(1);
 });
+*/
