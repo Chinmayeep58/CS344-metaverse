@@ -99,6 +99,16 @@ export default function Login() {
                             Create one
                         </Link>
                     </p>
+
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Student joining training?{" "}
+                        <Link
+                            to="/student-session"
+                            className="text-primary hover:underline"
+                        >
+                            Go to Student Session
+                        </Link>
+                    </p>
                 </CardContent>
             </Card>
         </div>
