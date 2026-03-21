@@ -1,0 +1,64 @@
+import { promises as dns } from "dns";
+
+export interface EmailVerificationResult {
+    isValid: boolean;
+    reason: string;
+}
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ALLOWED_DOMAIN = "iiitvadodara.ac.in";
+
+export const verifyEmailAddress = async (
+    email: string,
+): Promise<EmailVerificationResult> => {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    if (!normalizedEmail) {
+        return {
+            isValid: false,
+            reason: "Email is required",
+        };
+    }
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+        return {
+            isValid: false,
+            reason: "Invalid email format",
+        };
+    }
+
+    const domain = normalizedEmail.split("@")[1];
+    if (!domain) {
+        return {
+            isValid: false,
+            reason: "Invalid email domain",
+        };
+    }
+
+    if (domain !== ALLOWED_DOMAIN) {
+        return {
+            isValid: false,
+            reason: `Only institute email is allowed: *@${ALLOWED_DOMAIN}`,
+        };
+    }
+
+    try {
+        const mxRecords = await dns.resolveMx(domain);
+        if (!mxRecords || mxRecords.length === 0) {
+            return {
+                isValid: false,
+                reason: "Email domain has no MX records",
+            };
+        }
+
+        return {
+            isValid: true,
+            reason: `Institute email is valid (${ALLOWED_DOMAIN})`,
+        };
+    } catch {
+        return {
+            isValid: false,
+            reason: `Unable to verify institute domain (${ALLOWED_DOMAIN})`,
+        };
+    }
+};

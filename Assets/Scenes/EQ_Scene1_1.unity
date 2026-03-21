@@ -1782,6 +1782,7 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 78a55e5cc5db2a04c8cc19017d5eb100, type: 3}
   - {fileID: 21300000, guid: 552ff0583a705cc4983f3877e2033ef8, type: 3}
   - {fileID: 21300000, guid: 14b8a1596e61636429f029aa87434878, type: 3}
+  nextSceneName: EQ_Scene2
 --- !u!114 &2018306058
 MonoBehaviour:
   m_ObjectHideFlags: 0
