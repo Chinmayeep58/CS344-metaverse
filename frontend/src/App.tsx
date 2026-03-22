@@ -5,6 +5,7 @@ import Signup from "@/pages/Signup";
 import Dashboard from "@/pages/Dashboard";
 import Students from "@/pages/Students";
 import Certificates from "@/pages/Certificates";
+import StudentSession from "@/pages/StudentSession";
 
 function App() {
     return (
@@ -12,6 +13,8 @@ function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+
+            <Route path="/student-session" element={<StudentSession />} />
 
             <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<Dashboard />} />

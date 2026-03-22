@@ -28,7 +28,7 @@ export default function Login() {
 
         try {
             setLoading(true);
-            const response = await login({ email, password });
+            const response = await login({ email: email.trim(), password });
             setSession(response.token, response.user);
             toast({ title: "Login successful" });
             const redirectTo = (
@@ -97,6 +97,16 @@ export default function Login() {
                             className="text-primary hover:underline"
                         >
                             Create one
+                        </Link>
+                    </p>
+
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Student joining training?{" "}
+                        <Link
+                            to="/student-session"
+                            className="text-primary hover:underline"
+                        >
+                            Go to Student Session
                         </Link>
                     </p>
                 </CardContent>

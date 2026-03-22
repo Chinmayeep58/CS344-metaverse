@@ -82,9 +82,9 @@ export const loginUser = async (
 
 export const getUserByEmail = async (email: string) => {
     const query = `
-        SELECT * FROM users WHERE email = $1;
+        SELECT * FROM users WHERE LOWER(email) = LOWER($1);
     `;
-    const values = [email];
+    const values = [email.trim()];
     const res = await pool.query(query, values);
     return res.rows[0];
 };

@@ -8,7 +8,7 @@ Base URL: `http://localhost:3000/api`
 
 ### 1) Sign Up (Teacher)
 
-**POST** `/auth/signup`
+**POST** `/auth/signup` (Public)
 
 **Request Body**
 
@@ -39,7 +39,7 @@ Base URL: `http://localhost:3000/api`
 
 ### 2) Login
 
-**POST** `/auth/login`
+**POST** `/auth/login` (Public)
 
 **Request Body**
 
@@ -72,7 +72,7 @@ Base URL: `http://localhost:3000/api`
 
 Headers:
 
-```
+```bash
 Authorization: Bearer <token>
 ```
 
@@ -80,7 +80,7 @@ Authorization: Bearer <token>
 
 ## Student Endpoints
 
-### 4) Join Student with Teacher Code
+### 4) Join Student with Teacher Code + Create/Reuse Session
 
 **POST** `/students/join` (Public)
 
@@ -94,45 +94,38 @@ Authorization: Bearer <token>
 }
 ```
 
-**Response (201)**
+**Response (201 or 200)**
 
 ```json
 {
     "success": true,
     "teacher_wallet": "0x1234567890abcdef...",
     "teacher_id": 1,
-    "student_id": 42
+    "student_id": 42,
+    "student_full_name": "Rahul Sharma",
+    "student_email": "rahul@email.com",
+    "message": "Student joined and session created successfully",
+    "session": {
+        "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8",
+        "status": "active",
+        "started_at": "2026-03-21T11:22:33.000Z",
+        "reused": false
+    },
+    "metaversePayload": {
+        "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8",
+        "student_id": 42,
+        "teacher_id": 1,
+        "student_name": "Rahul Sharma",
+        "student_email": "rahul@email.com"
+    }
 }
 ```
 
-**Common Errors**
+**Notes**
 
 -   `400`: Missing fields / invalid email
--   `400`: Email verification failed (only `*@iiitvadodara.ac.in` allowed)
 -   `404`: Invalid teacher code
 -   `409`: Duplicate student email for same teacher
-
-### 4.1) Verify Student Email (No OTP)
-
-**POST** `/students/verify-email` (Public)
-
-**Request Body**
-
-```json
-{
-    "email": "student@iiitvadodara.ac.in"
-}
-```
-
-**Response (200/400)**
-
-```json
-{
-    "success": true,
-    "email": "student@iiitvadodara.ac.in",
-    "message": "Institute email is valid (iiitvadodara.ac.in)"
-}
-```
 
 ### 5) Update Student Score
 
@@ -147,21 +140,16 @@ Authorization: Bearer <token>
 }
 ```
 
-**Rules**
+**Behavior**
 
 -   score must be number in `0..100`
 -   only the owning teacher can update score
--   if score is `>= 80`, backend automatically attempts to issue certificate and send email
 
-**Automation info in response**
-
-`certificateAutomation` object is returned with status for auto-issue/email.
-
-### 6) Get Student by ID
+### 9) Get Student by ID
 
 **GET** `/students/get-student/:id` (Protected)
 
-### 7) Get My Students
+### 10) Get My Students
 
 **GET** `/students/my-students` (Protected)
 
@@ -169,7 +157,7 @@ Authorization: Bearer <token>
 
 ## Certificate Endpoints
 
-### 8) Issue Certificate
+### 11) Issue Certificate
 
 **POST** `/certificates/issue` (Protected)
 
@@ -184,7 +172,7 @@ Authorization: Bearer <token>
 }
 ```
 
-`teacherId` is optional. If provided, it must match student owner. Backend validates teacher ownership.
+`teacherId` is optional. If provided, must be a valid number and match student owner.
 
 **Response (201)**
 
@@ -196,6 +184,7 @@ Authorization: Bearer <token>
         "tokenId": 1,
         "txHash": "0xabc123...",
         "ipfsHash": "QmXyZ...",
+        "emailSent": true,
         "certificate": {
             "id": 1,
             "student_id": 42,
@@ -205,30 +194,26 @@ Authorization: Bearer <token>
             "issued_by": 1,
             "revoked": false,
             "issued_at": "2026-03-16T12:00:00.000Z"
-        }
+        },
+        "sessionClosed": true,
+        "closedSessionId": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8"
     }
 }
 ```
 
-**Common Errors**
-
--   `400`: missing studentId, invalid teacherId, or score below 80
--   `403`: teacher mismatch with student owner
--   `404`: student not found
-
-### 9) Get Certificate by Token
+### 12) Get Certificate by Token
 
 **GET** `/certificates/token/:tokenId` (Public)
 
-### 10) Get Certificates by Student
+### 13) Get Certificates by Student
 
 **GET** `/certificates/student/:studentId` (Protected)
 
-### 11) Revoke Certificate
+### 14) Revoke Certificate
 
 **PUT** `/certificates/:certificateId/revoke` (Protected)
 
-### 12) Verify Certificate on Blockchain
+### 15) Verify Certificate on Blockchain
 
 **GET** `/certificates/verify/:tokenId` (Public)
 
@@ -238,88 +223,64 @@ Authorization: Bearer <token>
 
 Protected endpoints require:
 
-```
+```bash
 Authorization: Bearer <jwt_token>
 ```
 
-Public endpoints:
+Public endpoints include:
 
--   `POST /students/join`
--   `GET /certificates/token/:tokenId`
--   `GET /certificates/verify/:tokenId`
+-   `/auth/signup`
+-   `/auth/login`
+-   `/students/join`
+-   `/students/verify-email`
+-   `/students/session/:sessionId/active`
+-   `/students/session/:sessionId/close`
+-   `/certificates/token/:tokenId`
+-   `/certificates/verify/:tokenId`
 
 ---
 
-## Testing Profiles (Ready to Use)
+## Session Model Notes (Current Implementation)
 
-Use these sample profiles for manual API testing in Postman/Insomnia.
-
-### Teacher Test Profile
-
-```json
-{
-    "id": 1,
-    "walletAddress": "0x63A22B04addD5E8fd248bf10D5c7D48233957050",
-    "email": "teacher1742148695993@test.com",
-    "fullName": "Test Teacher",
-    "password": "Test@123456",
-    "teacherCode": "TEACH-390D"
-}
-```
-
-> Note: `teacherCode` is auto-generated at signup, so it will be different on every fresh run.
-
-### Student Test Profiles (3-4)
-
-```json
-[
-    {
-        "teacher_code": "TEACH-91FA",
-        "name": "Rahul Sharma",
-        "email": "rahul.sharma@student.com",
-        "exam_score": 70,
-        "expected_certificate": false
-    },
-    {
-        "teacher_code": "TEACH-91FA",
-        "name": "Priya Verma",
-        "email": "priya.verma@student.com",
-        "exam_score": 79,
-        "expected_certificate": false
-    },
-    {
-        "teacher_code": "TEACH-91FA",
-        "name": "Arjun Patil",
-        "email": "arjun.patil@student.com",
-        "exam_score": 80,
-        "expected_certificate": true
-    },
-    {
-        "teacher_code": "TEACH-91FA",
-        "name": "Neha Kulkarni",
-        "email": "neha.kulkarni@student.com",
-        "exam_score": 92,
-        "expected_certificate": true
-    }
-]
-```
-
-### Suggested Test Order
-
-1. Sign up teacher with wallet `0x63A22B04addD5E8fd248bf10D5c7D48233957050`
-2. Login and copy JWT token
-3. Join students using `/students/join`
-4. Update score with `/students/update-score`
-5. Try `/certificates/issue` and verify:
-    - score 70/79 → should fail
-    - score 80/92 → should pass
+-   Session storage is in-memory (`TrainingSession.model.ts`), not persisted to DB.
+-   One active session pointer is tracked globally in controller (`currentActiveSessionId`).
+-   `current` alias resolves to this global active session id.
+-   If server restarts, session memory is cleared.
 
 ---
 
 ## Important Notes
 
-1. Certificate score threshold is **80** (not 70).
+1. Certificate score threshold is **80**.
 2. Student onboarding is through `/students/join` using `teacher_code`.
-3. Score update is separate via `/students/update-score`.
-4. Minting logic is unchanged in smart contract (`_safeMint(msg.sender, tokenId)`).
-5. Certificate metadata is uploaded to IPFS automatically during issuance.
+3. Session lifecycle is now available publicly for metaverse integration.
+4. Certificate issuance may close active session automatically.
+5. Certificate metadata is uploaded to IPFS during issuance.
+
+## Team Shared Access (Teacher Accounts)
+
+Use these for local team testing/access.
+
+### Teacher Test Profile
+
+
+```json
+[
+    {
+        "id": 1,
+        "wallet_address": "0x63A22B04addD5E8fd248bf10D5c7D48233957050",
+        "email": "teacher1773681775735@test.com",
+        "full_name": "Test Teacher",
+        "password": "Test@123456"
+        "teacher_code": "TEACH-390D",
+    },
+    {
+        "id": 2,
+        "wallet_address": "0xcA1B4c790D5B3F7A27817237F03936c43474AC39",
+        "email": "erandesamadhan2003@gmail.com",
+        "full_name": "Samadhan Subhash Erande",
+        "password": "samadhan",
+        "teacher_code": "TEACH-CC24",
+    }
+]
+```

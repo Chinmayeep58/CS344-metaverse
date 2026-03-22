@@ -15,11 +15,23 @@ import { uploadMetadataToIPFS } from "../services/ipfs.service";
 import { issueCertificateOnChain } from "../services/blockchain.service";
 import { sendCertificateIssuedEmail } from "../services/mail.service";
 import { verifyEmailAddress } from "../services/email-verification.service";
+import {
+    createOrReuseTrainingSession,
+    getActiveTrainingSessionById,
+    closeTrainingSessionById,
+    closeActiveSessionByStudentId,
+} from "../models/TrainingSession.model";
 
 const isValidEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
 };
+
+// single active session pointer (project-level assumption: one active session at a time)
+let currentActiveSessionId: string | null = null;
+
+// single-session helper:
+const getCurrentSessionId = (): string | null => currentActiveSessionId;
 
 export const updateStudentScore = async (req: Request, res: Response) => {
     try {
@@ -149,25 +161,39 @@ export const updateStudentScore = async (req: Request, res: Response) => {
                         tokenId,
                         txHash,
                         ipfsHash,
-                        issueDate: new Date(certificate.issued_at).toISOString(),
+                        issueDate: new Date(
+                            certificate.issued_at,
+                        ).toISOString(),
                     });
 
                     certificateAutomation = {
                         eligible: true,
                         issued: true,
                         emailSent,
-                        message:
-                            "Certificate auto-issued because score is 80+",
+                        message: "Certificate auto-issued because score is 80+",
                     };
                 } catch (autoIssueError: any) {
                     certificateAutomation = {
                         eligible: true,
                         issued: false,
                         emailSent: false,
-                        message: `Auto-issue failed: ${autoIssueError.message || autoIssueError}`,
+                        message: `Auto-issue failed: ${
+                            autoIssueError.message || autoIssueError
+                        }`,
                     };
                 }
             }
+        }
+
+        const closedSession = updatedStudent
+            ? closeActiveSessionByStudentId(updatedStudent.id)
+            : null;
+
+        if (
+            closedSession?.sessionId &&
+            currentActiveSessionId === closedSession.sessionId
+        ) {
+            currentActiveSessionId = null;
         }
 
         return res.status(200).json({
@@ -175,6 +201,8 @@ export const updateStudentScore = async (req: Request, res: Response) => {
             message: "Student exam score updated successfully",
             data: updatedStudent,
             certificateAutomation,
+            sessionClosed: Boolean(closedSession),
+            closedSessionId: closedSession?.sessionId || null,
         });
     } catch (error: any) {
         console.error("Error updating student exam score:", error);
@@ -224,37 +252,55 @@ export const joinStudentWithTeacherCode = async (
             });
         }
 
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const normalizedName = String(name).trim();
+
         const existingStudent = await getStudentByEmailAndTeacher(
-            email,
+            normalizedEmail,
             teacher.id,
         );
 
-        if (existingStudent) {
-            return res.status(201).json({
-                success: true,
-                full_name: existingStudent.full_name,
-                email: existingStudent.email,
-                student_id: existingStudent.id,
-                teacher_id: teacher.id,
-                teacer_wallet: teacher.wallet_address,
-                message: "Student already exists for this teacher",
-            });
-        }
+        const student =
+            existingStudent ||
+            (await createStudent({
+                full_name: normalizedName,
+                email: normalizedEmail,
+                created_by: teacher.id,
+            }));
 
-        const student = await createStudent({
-            full_name: String(name),
-            email: String(email),
-            created_by: teacher.id,
+        const { session, reused } = createOrReuseTrainingSession({
+            studentId: student.id,
+            teacherId: teacher.id,
+            teacherCode: String(teacher_code),
+            studentName: student.full_name,
+            studentEmail: student.email || "",
         });
 
-        return res.status(201).json({
+        currentActiveSessionId = session.sessionId;
+
+        return res.status(existingStudent ? 200 : 201).json({
             success: true,
             teacher_wallet: teacher.wallet_address,
             teacher_id: teacher.id,
             student_id: student.id,
             student_full_name: student.full_name,
             student_email: student.email,
-            message: "Student joined successfully",
+            message: existingStudent
+                ? "Student found and session activated"
+                : "Student joined and session created successfully",
+            session: {
+                session_id: session.sessionId,
+                status: session.status,
+                started_at: session.startedAt,
+                reused,
+            },
+            metaversePayload: {
+                session_id: session.sessionId,
+                student_id: session.studentId,
+                teacher_id: session.teacherId,
+                student_name: session.studentName,
+                student_email: session.studentEmail,
+            },
         });
     } catch (error: any) {
         if (error?.code === "23505") {
@@ -344,6 +390,109 @@ export const verifyStudentEmailAddress = async (
         return res.status(500).json({
             success: false,
             message: "Email verification failed",
+            error: error.message || "Internal server error",
+        });
+    }
+};
+
+export const getActiveStudentSession = async (req: Request, res: Response) => {
+    try {
+        const sessionId = getCurrentSessionId();
+
+        if (!sessionId) {
+            return res.status(404).json({
+                success: false,
+                message: "No active session found",
+            });
+        }
+
+        const session = getActiveTrainingSessionById(sessionId);
+
+        if (!session) {
+            if (currentActiveSessionId === sessionId) {
+                currentActiveSessionId = null;
+            }
+            return res.status(404).json({
+                success: false,
+                message: "No active session found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: session,
+        });
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch active session",
+            error: error.message || "Internal server error",
+        });
+    }
+};
+
+export const closeStudentSession = async (req: Request, res: Response) => {
+    try {
+        const sessionId = getCurrentSessionId();
+        const { exam_score } = req.body || {};
+
+        if (!sessionId) {
+            return res.status(404).json({
+                success: false,
+                message: "No active session found",
+            });
+        }
+
+        const session = getActiveTrainingSessionById(sessionId);
+        if (!session) {
+            if (currentActiveSessionId === sessionId) {
+                currentActiveSessionId = null;
+            }
+            return res.status(404).json({
+                success: false,
+                message: "No active session found",
+            });
+        }
+
+        let parsedScore: number | null = null;
+        if (exam_score !== undefined) {
+            if (!Number.isFinite(Number(exam_score))) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid exam_score",
+                });
+            }
+            parsedScore = Number(exam_score);
+            if (parsedScore < 0 || parsedScore > 100) {
+                return res.status(400).json({
+                    success: false,
+                    message: "exam_score must be between 0 and 100",
+                });
+            }
+        }
+
+        const closed = closeTrainingSessionById(sessionId);
+
+        let scoreUpdated = false;
+        if (closed && parsedScore !== null) {
+            await updateStudentExamScore(closed.studentId, parsedScore);
+            scoreUpdated = true;
+        }
+
+        if (currentActiveSessionId === sessionId) {
+            currentActiveSessionId = null;
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Session closed successfully",
+            data: closed,
+            scoreUpdated,
+        });
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: "Failed to close session",
             error: error.message || "Internal server error",
         });
     }

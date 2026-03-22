@@ -2,6 +2,8 @@ import { createUser, getUserByEmail } from "../models/User.model";
 import { hashPassword, comparePassword } from "../utils/password.util";
 import { generateToken } from "../utils/jwt.util";
 
+const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+
 export const signup = async (req: any, res: any): Promise<void> => {
     try {
         const { walletAddress, email, fullName, password } = req.body;
@@ -11,7 +13,13 @@ export const signup = async (req: any, res: any): Promise<void> => {
             return;
         }
 
-        const existingUser = await getUserByEmail(email);
+        const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail) {
+            res.status(400).json({ message: "Valid email is required" });
+            return;
+        }
+
+        const existingUser = await getUserByEmail(normalizedEmail);
         if (existingUser) {
             res.status(409).json({ message: "User already exists" });
             return;
@@ -20,7 +28,7 @@ export const signup = async (req: any, res: any): Promise<void> => {
         const passwordHash = await hashPassword(password);
         const user = await createUser(
             walletAddress,
-            email,
+            normalizedEmail,
             fullName,
             passwordHash,
         );
@@ -61,7 +69,13 @@ export const login = async (req: any, res: any): Promise<void> => {
             return;
         }
 
-        const user = await getUserByEmail(email);
+        const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail) {
+            res.status(400).json({ message: "Valid email is required" });
+            return;
+        }
+
+        const user = await getUserByEmail(normalizedEmail);
         if (!user) {
             res.status(401).json({ message: "Invalid credentials" });
             return;

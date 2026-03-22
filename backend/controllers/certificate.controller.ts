@@ -13,20 +13,22 @@ import {
     verifyCertificateOnChain,
 } from "../services/blockchain.service";
 import { sendCertificateIssuedEmail } from "../services/mail.service";
+import { closeActiveSessionByStudentId } from "../models/TrainingSession.model";
 
 export const issueCertificate = async (req: Request, res: Response) => {
     try {
         const { studentId, teacherId } = req.body;
         const userId = (req as any).user?.id;
 
-        if (!studentId) {
+        const parsedStudentId = Number(studentId);
+        if (!Number.isFinite(parsedStudentId)) {
             return res.status(400).json({
                 success: false,
                 message: "Student ID is required",
             });
         }
 
-        const student = await getStudentById(studentId);
+        const student = await getStudentById(parsedStudentId);
 
         if (!student) {
             return res.status(404).json({
@@ -103,7 +105,7 @@ export const issueCertificate = async (req: Request, res: Response) => {
         );
 
         const certificate = await createCertificate({
-            student_id: studentId,
+            student_id: parsedStudentId,
             token_id: tokenId,
             tx_hash: txHash,
             ipfs_hash: ipfsHash,
@@ -122,8 +124,13 @@ export const issueCertificate = async (req: Request, res: Response) => {
                 issueDate: new Date(certificate.issued_at).toISOString(),
             });
         } catch (emailError) {
-            console.error("Certificate issued, but email sending failed:", emailError);
+            console.error(
+                "Certificate issued, but email sending failed:",
+                emailError,
+            );
         }
+
+        const closedSession = closeActiveSessionByStudentId(parsedStudentId);
 
         return res.status(201).json({
             success: true,
@@ -134,6 +141,8 @@ export const issueCertificate = async (req: Request, res: Response) => {
                 ipfsHash,
                 emailSent,
                 certificate,
+                sessionClosed: Boolean(closedSession),
+                closedSessionId: closedSession?.sessionId || null,
             },
         });
     } catch (error: any) {
