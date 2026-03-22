@@ -25,6 +25,7 @@ DB_HOST=your_host
 DB_PORT=22360
 DB_USER=your_user
 DB_PASSWORD=your_password
+DB_SSL=true
 
 # JWT
 JWT_SECRET=your_secret
@@ -38,7 +39,24 @@ CONTRACT_ADDRESS=0x4ae404489cb792f52af2b86752559f4d3c3b4a70
 # IPFS
 PINATA_API_KEY=your_api_key
 PINATA_SECRET_API_KEY=your_secret_key
+
+# Email (SMTP)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password
+SMTP_SECURE=false
+MAIL_FROM="VR Disaster Training <your_email@gmail.com>"
 ```
+
+For local Docker PostgreSQL (non-SSL), set `DB_SSL=false`.
+
+### Certificate Email Delivery
+
+When a certificate is issued successfully, the backend also attempts to send an email to the student's email address.
+
+-   Email sending is enabled only when SMTP variables are configured.
+-   If email sending fails, certificate issuance still succeeds and API response contains `emailSent: false`.
 
 ## Running the Server
 

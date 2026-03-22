@@ -90,7 +90,7 @@ Authorization: Bearer <token>
 {
     "teacher_code": "TEACH-91FA",
     "name": "Rahul Sharma",
-    "email": "rahul@email.com"
+    "email": "202351098@iiitvadodara.ac.in"
 }
 ```
 
@@ -108,8 +108,31 @@ Authorization: Bearer <token>
 **Common Errors**
 
 -   `400`: Missing fields / invalid email
+-   `400`: Email verification failed (only `*@iiitvadodara.ac.in` allowed)
 -   `404`: Invalid teacher code
 -   `409`: Duplicate student email for same teacher
+
+### 4.1) Verify Student Email (No OTP)
+
+**POST** `/students/verify-email` (Public)
+
+**Request Body**
+
+```json
+{
+    "email": "student@iiitvadodara.ac.in"
+}
+```
+
+**Response (200/400)**
+
+```json
+{
+    "success": true,
+    "email": "student@iiitvadodara.ac.in",
+    "message": "Institute email is valid (iiitvadodara.ac.in)"
+}
+```
 
 ### 5) Update Student Score
 
@@ -128,6 +151,11 @@ Authorization: Bearer <token>
 
 -   score must be number in `0..100`
 -   only the owning teacher can update score
+-   if score is `>= 80`, backend automatically attempts to issue certificate and send email
+
+**Automation info in response**
+
+`certificateAutomation` object is returned with status for auto-issue/email.
 
 ### 6) Get Student by ID
 
