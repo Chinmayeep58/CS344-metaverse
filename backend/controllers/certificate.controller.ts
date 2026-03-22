@@ -14,7 +14,7 @@ import {
 } from "../services/blockchain.service";
 import { sendCertificateIssuedEmail } from "../services/mail.service";
 import { closeActiveSessionByStudentId } from "../models/TrainingSession.model";
-
+ 
 export const issueCertificate = async (req: Request, res: Response) => {
     try {
         const { studentId, teacherId } = req.body;
