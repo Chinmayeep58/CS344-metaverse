@@ -77,13 +77,14 @@ export interface EmailVerificationResult {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ALLOWED_DOMAIN = "iiitvadodara.ac.in";
 
-// 🔥 Toggle this for development vs production
 const DEV_MODE = true;
 
 export const verifyEmailAddress = async (
     email: string,
 ): Promise<EmailVerificationResult> => {
-    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const normalizedEmail = String(email || "")
+        .trim()
+        .toLowerCase();
 
     // 1️⃣ Check empty
     if (!normalizedEmail) {
@@ -110,7 +111,6 @@ export const verifyEmailAddress = async (
         };
     }
 
-    // 🔥 DEV MODE → allow everything
     if (DEV_MODE) {
         return {
             isValid: true,
@@ -118,7 +118,6 @@ export const verifyEmailAddress = async (
         };
     }
 
-    // 3️⃣ Restrict to institute domain (for production)
     if (domain !== ALLOWED_DOMAIN) {
         return {
             isValid: false,

@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import contractArtifact from "../../blockchain/artifacts/contracts/DistasterCertificate.sol/DisasterCertificate.json";
+import contractArtifact from "../DisasterCertificate.json";
 
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;

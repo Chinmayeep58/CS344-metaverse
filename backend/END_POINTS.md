@@ -90,7 +90,7 @@ Authorization: Bearer <token>
 {
     "teacher_code": "TEACH-91FA",
     "name": "Rahul Sharma",
-    "email": "rahul@email.com"
+    "email": "202351098@iiitvadodara.ac.in"
 }
 ```
 
@@ -123,86 +123,11 @@ Authorization: Bearer <token>
 
 **Notes**
 
--   `201`: new student created
--   `200`: existing student found and active session reused/activated
+-   `400`: Missing fields / invalid email
+-   `404`: Invalid teacher code
+-   `409`: Duplicate student email for same teacher
 
-### 5) Verify Student Email
-
-**POST** `/students/verify-email` (Public)
-
-**Request Body**
-
-```json
-{
-    "email": "rahul@email.com"
-}
-```
-
-### 6) Get Active Session
-
-**GET** `/students/session/:sessionId/active` (Public)
-
-Use `:sessionId = current` when frontend/metaverse does not provide manual session id:
-
--   `GET /students/session/current/active`
-
-**Response (200)**
-
-```json
-{
-    "success": true,
-    "data": {
-        "sessionId": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8",
-        "studentId": 42,
-        "teacherId": 1,
-        "teacherCode": "TEACH-91FA",
-        "studentName": "Rahul Sharma",
-        "studentEmail": "rahul@email.com",
-        "status": "active",
-        "startedAt": "2026-03-21T11:22:33.000Z",
-        "endedAt": null
-    }
-}
-```
-
-### 7) Close Active Session
-
-**POST** `/students/session/:sessionId/close` (Public)
-
-Use `:sessionId = current` for single-active-session project mode:
-
--   `POST /students/session/current/close`
-
-**Request Body (optional)**
-
-```json
-{
-    "exam_score": 85
-}
-```
-
-**Response (200)**
-
-```json
-{
-    "success": true,
-    "message": "Session closed successfully",
-    "data": {
-        "sessionId": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8",
-        "studentId": 42,
-        "teacherId": 1,
-        "teacherCode": "TEACH-91FA",
-        "studentName": "Rahul Sharma",
-        "studentEmail": "rahul@email.com",
-        "status": "closed",
-        "startedAt": "2026-03-21T11:22:33.000Z",
-        "endedAt": "2026-03-21T11:50:10.000Z"
-    },
-    "scoreUpdated": true
-}
-```
-
-### 8) Update Student Score
+### 5) Update Student Score
 
 **POST** `/students/update-score` (Protected)
 
@@ -217,10 +142,8 @@ Use `:sessionId = current` for single-active-session project mode:
 
 **Behavior**
 
--   validates score `0..100`
--   only owning teacher can update
--   if score `>= 80`, auto certificate flow may trigger
--   active session for this student is auto-closed (if found)
+-   score must be number in `0..100`
+-   only the owning teacher can update score
 
 ### 9) Get Student by ID
 

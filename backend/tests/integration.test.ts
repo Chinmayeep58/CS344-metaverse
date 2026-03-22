@@ -3,7 +3,9 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const BASE_URL = process.env.BASE_URL || "http://localhost:3000/api";
+const BASE_URL =
+    process.env.BASE_URL || "https://cs344-metaverse-1.onrender.com/api";
+const API_ORIGIN = BASE_URL.replace(/\/api\/?$/, "");
 
 // add this block before any function that calls logInfo/logError/logSuccess
 const colors = {
@@ -115,7 +117,9 @@ const buildStudentsForTeachers = (teachers: TeacherSession[]) => {
 
 async function testHealthCheck() {
     logInfo("Test 1: Health Check");
-    const response = await axios.get("http://localhost:3000/health");
+    const response = await axios.get(`${API_ORIGIN}/health`, {
+        timeout: 30000,
+    });
     if (response.status !== 200 || response.data.status !== "OK") {
         throw new Error("Health check failed");
     }
@@ -385,8 +389,16 @@ async function run() {
 }
 
 run().catch((error: any) => {
-    logError(
-        `\n💥 Flow failed: ${error.response?.data?.message || error.message}`,
-    );
+    const details =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        JSON.stringify(error);
+    logError(`\n💥 Flow failed: ${details}`);
+
+    if (error?.response?.status) {
+        logError(`HTTP ${error.response.status}`);
+    }
+
     process.exit(1);
 });
