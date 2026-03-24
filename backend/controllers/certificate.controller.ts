@@ -13,12 +13,29 @@ import {
     verifyCertificateOnChain,
 } from "../services/blockchain.service";
 import { sendCertificateIssuedEmail } from "../services/mail.service";
-import { closeActiveSessionByStudentId } from "../models/TrainingSession.model";
- 
+import {
+    closeActiveSessionByStudentId,
+    getActiveTrainingSessionById,
+} from "../models/TrainingSession.model";
+
+const getSessionIdFromRequest = (req: Request): string | null => {
+    const bodySessionId =
+        (req.body as any)?.session_id ?? (req.body as any)?.sessionId;
+    const querySessionId =
+        (req.query as any)?.session_id ?? (req.query as any)?.sessionId;
+    const headerSessionId = req.headers["x-session-id"];
+
+    const candidate = bodySessionId ?? querySessionId ?? headerSessionId;
+    if (!candidate) return null;
+    const normalized = Array.isArray(candidate) ? candidate[0] : candidate;
+    return String(normalized).trim() || null;
+};
+
 export const issueCertificate = async (req: Request, res: Response) => {
     try {
         const { studentId, teacherId } = req.body;
         const userId = (req as any).user?.id;
+        const sessionId = getSessionIdFromRequest(req);
 
         const parsedStudentId = Number(studentId);
         if (!Number.isFinite(parsedStudentId)) {
@@ -62,18 +79,66 @@ export const issueCertificate = async (req: Request, res: Response) => {
             });
         }
 
-        const resolvedTeacherId = Number(
-            userId ?? teacherId ?? student.created_by ?? 1,
-        );
+        let resolvedTeacherId: number;
 
-        if (
-            student.created_by &&
-            resolvedTeacherId !== Number(student.created_by)
-        ) {
-            return res.status(403).json({
-                success: false,
-                message: "Teacher ID does not match student owner",
-            });
+        if (userId) {
+            resolvedTeacherId = Number(userId);
+
+            if (
+                student.created_by &&
+                resolvedTeacherId !== Number(student.created_by)
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Teacher ID does not match student owner",
+                });
+            }
+        } else {
+            if (!sessionId) {
+                return res.status(401).json({
+                    success: false,
+                    message:
+                        "Authentication token or session_id is required to issue certificate",
+                });
+            }
+
+            const session = getActiveTrainingSessionById(sessionId);
+
+            if (!session) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Invalid or inactive session",
+                });
+            }
+
+            if (Number(session.studentId) !== Number(parsedStudentId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Session does not belong to this student",
+                });
+            }
+
+            resolvedTeacherId = Number(session.teacherId);
+
+            if (
+                student.created_by &&
+                resolvedTeacherId !== Number(student.created_by)
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Session teacher mismatch for this student",
+                });
+            }
+
+            if (
+                teacherId !== undefined &&
+                Number(teacherId) !== resolvedTeacherId
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message: "teacherId does not match active session teacher",
+                });
+            }
         }
 
         const metadata = {

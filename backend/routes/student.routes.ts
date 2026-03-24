@@ -19,6 +19,7 @@ router.post("/verify-email", verifyStudentEmailAddress);
 // changed: no :sessionId, single active session only
 router.get("/session/active", getActiveStudentSession);
 router.post("/session/close", closeStudentSession);
+router.post("/update-score/session", updateStudentScore);
 
 // All routes require authentication
 router.post("/update-score", authenticateToken, updateStudentScore);
