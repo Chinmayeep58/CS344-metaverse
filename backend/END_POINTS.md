@@ -1,4 +1,4 @@
-# API Endpoints Documentation (Unity + Web)
+# API Endpoints Documentation (Unity VR + Web)
 
 Base URL: `http://localhost:3000/api`
 
@@ -56,19 +56,17 @@ Authorization: Bearer <jwt_token>
 }
 ```
 
-**Unity must save these fields from response:**
+Unity must save from response:
 
 -   `session.session_id`
 -   `student_id`
 -   `teacher_id`
 
-`metaversePayload` already returns all required runtime values for VR.
+`metaversePayload` already contains exactly what Unity needs.
 
 ### Get Active Session
 
 **GET** `/students/session/active` (Public)
-
-Returns the current active session from backend memory.
 
 ### Close Active Session
 
@@ -81,8 +79,6 @@ Optional body:
     "exam_score": 88
 }
 ```
-
-If `exam_score` is provided, backend updates student score when closing session.
 
 ### Verify Student Email
 
@@ -111,17 +107,23 @@ If `exam_score` is provided, backend updates student score when closing session.
 }
 ```
 
-`session_id` can be passed by:
+`session_id` can be passed via body/query/header:
 
--   body key `session_id` or `sessionId`
--   query key `session_id` or `sessionId`
--   header `x-session-id`
+-   body: `session_id` or `sessionId`
+-   query: `session_id` or `sessionId`
+-   header: `x-session-id`
 
-Validation checks in session flow:
+Validation:
 
--   session is active
--   `session.studentId === student_id`
--   session teacher matches student owner
+-   session must be active
+-   session student must match `student_id`
+-   session teacher must match student owner
+
+When score is updated:
+
+-   if score `< 80`: certificate is not issued
+-   if score `>= 80`: certificate is auto-issued (if not already existing)
+-   session is automatically closed at end of update flow
 
 ### Get Student by ID
 
@@ -135,7 +137,7 @@ Validation checks in session flow:
 
 ## 3) Certificate Endpoints
 
-### Issue Certificate (Teacher JWT flow)
+### Issue Certificate (Teacher JWT flow only)
 
 **POST** `/certificates/issue` (Protected)
 
@@ -146,25 +148,10 @@ Validation checks in session flow:
 }
 ```
 
-### Issue Certificate (Unity Session flow, no JWT)
+Notes:
 
-**POST** `/certificates/issue/session` (Public, session-validated)
-
-```json
-{
-    "studentId": 42,
-    "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8"
-}
-```
-
-Optional `teacherId` may be sent. If sent, it must match active session teacher.
-
-Certificate issue conditions:
-
--   student exists
--   student has `full_name`, `email`, and `exam_score`
--   `exam_score >= 80`
--   caller is authorized via JWT or valid active session
+-   This route is for web/admin manual issuing.
+-   Duplicate protection is enabled. If certificate already exists, API returns `409`.
 
 ### Get Certificate by Token
 
@@ -184,11 +171,21 @@ Certificate issue conditions:
 
 ---
 
-## 4) Unity Flow (What to call and when)
+## 4) Unity VR Flow (Final)
+
+### Dashboard-to-VR Session Handoff (your use case)
+
+If keyboard/input is not available in VR:
+
+1. Join student from Dashboard using `POST /students/join`.
+2. VR calls `GET /students/session/active`.
+3. VR gets the same active session and then submits score with `POST /students/update-score/session`.
+
+This is supported in current backend.
 
 ### Step 1: Start session
 
-Call `POST /students/join` when student enters teacher code.
+Call `POST /students/join`.
 
 Store:
 
@@ -196,13 +193,9 @@ Store:
 -   `student_id`
 -   `teacher_id`
 
-### Step 2: Submit exam score
+### Step 2: Finish training and submit score
 
-After VR test finishes, call:
-
-`POST /students/update-score/session`
-
-Body:
+Call `POST /students/update-score/session`.
 
 ```json
 {
@@ -212,41 +205,36 @@ Body:
 }
 ```
 
-### Step 3: Certificate decision
+### Step 3: Read response
 
--   If score `< 80`: do not call issue certificate.
--   If score `>= 80`:
-    -   backend may auto-issue in score flow (check `certificateAutomation`), or
-    -   call manual issue endpoint below.
+Use `certificateAutomation` from response:
 
-### Step 4: Manual certificate issue (if needed)
+-   `eligible`
+-   `issued`
+-   `message`
+-   `tokenId`
+-   `txHash`
+-   `ipfsHash`
 
-Call:
+If `issued = true`, certificate is done. No extra issue API call needed.
 
-`POST /certificates/issue/session`
+### Step 4: Verify (optional)
 
-Body:
+If `tokenId` is present, verify:
 
-```json
-{
-    "studentId": 42,
-    "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8"
-}
-```
-
-### Step 5: Optional close session
-
-Call `POST /students/session/close` when done.
+-   `GET /certificates/token/:tokenId`
+-   `GET /certificates/verify/:tokenId`
 
 ---
 
 ## 5) Common Error Codes for Unity Team
 
 -   `400`: invalid payload (missing fields, invalid score)
--   `401`: missing token/session auth where needed
--   `403`: invalid/inactive session, student mismatch, teacher mismatch
+-   `401`: missing auth/session where required
+-   `403`: invalid or inactive session, student mismatch, teacher mismatch
 -   `404`: student/session/certificate not found
--   `500`: server/internal failure
+-   `409`: duplicate certificate attempt
+-   `500`: internal error
 
 ---
 
@@ -271,7 +259,6 @@ Call `POST /students/session/close` when done.
 -   `/students/session/active`
 -   `/students/session/close`
 -   `/students/update-score/session`
--   `/certificates/issue/session`
 -   `/certificates/token/:tokenId`
 -   `/certificates/verify/:tokenId`
 
@@ -279,15 +266,15 @@ Call `POST /students/session/close` when done.
 
 ## 7) Session Model Notes
 
--   Session storage is in-memory (`TrainingSession.model.ts`), not persisted.
+-   Session storage is in-memory (`TrainingSession.model.ts`), not persisted in DB.
 -   On backend restart, active sessions are lost.
--   Current implementation uses a single active session pointer in controller scope.
+-   Current implementation tracks one active session pointer in controller scope.
 
 ---
 
 ## 8) Important Notes
 
 1. Certificate threshold is **80**.
-2. Certificate metadata is uploaded to IPFS during issuance.
-3. Issuance is also recorded on blockchain.
-4. Issuance may close active session automatically.
+2. IPFS upload and blockchain mint happen during certificate issuance.
+3. Unity should use only `update-score/session` for score + auto-certificate.
+4. Session closes automatically after score update flow completes.

@@ -13,29 +13,19 @@ import {
     verifyCertificateOnChain,
 } from "../services/blockchain.service";
 import { sendCertificateIssuedEmail } from "../services/mail.service";
-import {
-    closeActiveSessionByStudentId,
-    getActiveTrainingSessionById,
-} from "../models/TrainingSession.model";
-
-const getSessionIdFromRequest = (req: Request): string | null => {
-    const bodySessionId =
-        (req.body as any)?.session_id ?? (req.body as any)?.sessionId;
-    const querySessionId =
-        (req.query as any)?.session_id ?? (req.query as any)?.sessionId;
-    const headerSessionId = req.headers["x-session-id"];
-
-    const candidate = bodySessionId ?? querySessionId ?? headerSessionId;
-    if (!candidate) return null;
-    const normalized = Array.isArray(candidate) ? candidate[0] : candidate;
-    return String(normalized).trim() || null;
-};
+import { closeActiveSessionByStudentId } from "../models/TrainingSession.model";
 
 export const issueCertificate = async (req: Request, res: Response) => {
     try {
         const { studentId, teacherId } = req.body;
         const userId = (req as any).user?.id;
-        const sessionId = getSessionIdFromRequest(req);
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication token is required",
+            });
+        }
 
         const parsedStudentId = Number(studentId);
         if (!Number.isFinite(parsedStudentId)) {
@@ -79,66 +69,44 @@ export const issueCertificate = async (req: Request, res: Response) => {
             });
         }
 
-        let resolvedTeacherId: number;
+        const existingCertificates = await getDbCertificatesByStudent(
+            parsedStudentId,
+        );
+        if (existingCertificates.length > 0) {
+            const latest = existingCertificates[0];
+            return res.status(409).json({
+                success: false,
+                message: "Certificate already exists for this student",
+                data: {
+                    tokenId: latest.token_id,
+                    txHash: latest.tx_hash,
+                    ipfsHash: latest.ipfs_hash,
+                    certificateId: latest.id,
+                    revoked: latest.revoked,
+                },
+            });
+        }
 
-        if (userId) {
-            resolvedTeacherId = Number(userId);
+        const resolvedTeacherId = Number(userId);
 
-            if (
-                student.created_by &&
-                resolvedTeacherId !== Number(student.created_by)
-            ) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Teacher ID does not match student owner",
-                });
-            }
-        } else {
-            if (!sessionId) {
-                return res.status(401).json({
-                    success: false,
-                    message:
-                        "Authentication token or session_id is required to issue certificate",
-                });
-            }
+        if (
+            student.created_by &&
+            resolvedTeacherId !== Number(student.created_by)
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "Teacher ID does not match student owner",
+            });
+        }
 
-            const session = getActiveTrainingSessionById(sessionId);
-
-            if (!session) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Invalid or inactive session",
-                });
-            }
-
-            if (Number(session.studentId) !== Number(parsedStudentId)) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Session does not belong to this student",
-                });
-            }
-
-            resolvedTeacherId = Number(session.teacherId);
-
-            if (
-                student.created_by &&
-                resolvedTeacherId !== Number(student.created_by)
-            ) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Session teacher mismatch for this student",
-                });
-            }
-
-            if (
-                teacherId !== undefined &&
-                Number(teacherId) !== resolvedTeacherId
-            ) {
-                return res.status(403).json({
-                    success: false,
-                    message: "teacherId does not match active session teacher",
-                });
-            }
+        if (
+            teacherId !== undefined &&
+            Number(teacherId) !== resolvedTeacherId
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "teacherId does not match authenticated teacher",
+            });
         }
 
         const metadata = {

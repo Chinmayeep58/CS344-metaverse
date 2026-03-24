@@ -140,11 +140,17 @@ export const updateStudentScore = async (req: Request, res: Response) => {
             issued: boolean;
             emailSent: boolean;
             message: string;
+            tokenId: number | null;
+            txHash: string | null;
+            ipfsHash: string | null;
         } = {
             eligible: parsedScore >= 80,
             issued: false,
             emailSent: false,
             message: "Score below 80, certificate not eligible",
+            tokenId: null,
+            txHash: null,
+            ipfsHash: null,
         };
 
         if (
@@ -164,6 +170,9 @@ export const updateStudentScore = async (req: Request, res: Response) => {
                     emailSent: false,
                     message:
                         "Certificate already exists for this student; skipped auto-issue",
+                    tokenId: Number(existingCertificates[0].token_id) || null,
+                    txHash: existingCertificates[0].tx_hash || null,
+                    ipfsHash: existingCertificates[0].ipfs_hash || null,
                 };
             } else {
                 try {
@@ -225,6 +234,9 @@ export const updateStudentScore = async (req: Request, res: Response) => {
                         issued: true,
                         emailSent,
                         message: "Certificate auto-issued because score is 80+",
+                        tokenId,
+                        txHash,
+                        ipfsHash,
                     };
                 } catch (autoIssueError: any) {
                     certificateAutomation = {
@@ -234,6 +246,9 @@ export const updateStudentScore = async (req: Request, res: Response) => {
                         message: `Auto-issue failed: ${
                             autoIssueError.message || autoIssueError
                         }`,
+                        tokenId: null,
+                        txHash: null,
+                        ipfsHash: null,
                     };
                 }
             }
