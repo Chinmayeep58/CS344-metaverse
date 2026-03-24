@@ -33,10 +33,24 @@ let currentActiveSessionId: string | null = null;
 // single-session helper:
 const getCurrentSessionId = (): string | null => currentActiveSessionId;
 
+const getSessionIdFromRequest = (req: Request): string | null => {
+    const bodySessionId =
+        (req.body as any)?.session_id ?? (req.body as any)?.sessionId;
+    const querySessionId =
+        (req.query as any)?.session_id ?? (req.query as any)?.sessionId;
+    const headerSessionId = req.headers["x-session-id"];
+
+    const candidate = bodySessionId ?? querySessionId ?? headerSessionId;
+    if (!candidate) return null;
+    const normalized = Array.isArray(candidate) ? candidate[0] : candidate;
+    return String(normalized).trim() || null;
+};
+
 export const updateStudentScore = async (req: Request, res: Response) => {
     try {
         const { student_id, exam_score } = req.body;
         const userId = (req as any).user?.id;
+        const sessionId = getSessionIdFromRequest(req);
 
         if (!student_id || exam_score === undefined) {
             return res.status(400).json({
@@ -69,11 +83,51 @@ export const updateStudentScore = async (req: Request, res: Response) => {
             });
         }
 
-        if (!userId || Number(student.created_by) !== Number(userId)) {
-            return res.status(403).json({
-                success: false,
-                message: "You are not allowed to update this student",
-            });
+        let resolvedTeacherId: number | null = null;
+
+        if (userId) {
+            if (Number(student.created_by) !== Number(userId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You are not allowed to update this student",
+                });
+            }
+            resolvedTeacherId = Number(userId);
+        } else {
+            if (!sessionId) {
+                return res.status(401).json({
+                    success: false,
+                    message:
+                        "Authentication token or session_id is required to update score",
+                });
+            }
+
+            const session = getActiveTrainingSessionById(sessionId);
+            if (!session) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Invalid or inactive session",
+                });
+            }
+
+            if (Number(session.studentId) !== Number(student.id)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Session does not belong to this student",
+                });
+            }
+
+            if (
+                student.created_by !== undefined &&
+                Number(student.created_by) !== Number(session.teacherId)
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Session teacher mismatch for this student",
+                });
+            }
+
+            resolvedTeacherId = Number(session.teacherId);
         }
 
         const updatedStudent = await updateStudentExamScore(
@@ -151,7 +205,7 @@ export const updateStudentScore = async (req: Request, res: Response) => {
                         token_id: tokenId,
                         tx_hash: txHash,
                         ipfs_hash: ipfsHash,
-                        issued_by: Number(userId),
+                        issued_by: Number(resolvedTeacherId),
                     });
 
                     const emailSent = await sendCertificateIssuedEmail({
@@ -406,7 +460,7 @@ export const getActiveStudentSession = async (req: Request, res: Response) => {
             });
         }
 
-        const session = getActiveTrainingSessionById(sessionId);
+        const session: any = getActiveTrainingSessionById(sessionId);
 
         if (!session) {
             if (currentActiveSessionId === sessionId) {

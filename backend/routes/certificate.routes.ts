@@ -12,6 +12,7 @@ const router = Router();
 
 // Protected routes - require authentication
 router.post("/issue", authenticateToken, issueCertificate);
+router.post("/issue/session", issueCertificate);
 router.get(
     "/student/:studentId",
     authenticateToken,

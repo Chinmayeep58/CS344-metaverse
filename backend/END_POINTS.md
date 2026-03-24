@@ -1,16 +1,14 @@
-# API Endpoints Documentation (Updated)
+# API Endpoints Documentation (Unity + Web)
 
 Base URL: `http://localhost:3000/api`
 
 ---
 
-## Authentication Endpoints
+## 1) Authentication Endpoints
 
-### 1) Sign Up (Teacher)
+### Sign Up (Teacher)
 
 **POST** `/auth/signup` (Public)
-
-**Request Body**
 
 ```json
 {
@@ -21,27 +19,9 @@ Base URL: `http://localhost:3000/api`
 }
 ```
 
-**Response (201)**
-
-```json
-{
-    "message": "User created successfully",
-    "token": "eyJhbGciOi...",
-    "user": {
-        "id": 1,
-        "email": "teacher@example.com",
-        "fullName": "John Doe",
-        "walletAddress": "0x1234567890abcdef...",
-        "teacherCode": "TEACH-91FA"
-    }
-}
-```
-
-### 2) Login
+### Login (Teacher)
 
 **POST** `/auth/login` (Public)
-
-**Request Body**
 
 ```json
 {
@@ -50,88 +30,67 @@ Base URL: `http://localhost:3000/api`
 }
 ```
 
-**Response (200)**
-
-```json
-{
-    "message": "Login successful",
-    "token": "eyJhbGciOi...",
-    "user": {
-        "id": 1,
-        "email": "teacher@example.com",
-        "fullName": "John Doe",
-        "walletAddress": "0x1234567890abcdef...",
-        "teacherCode": "TEACH-91FA"
-    }
-}
-```
-
-### 3) Get Profile
+### Get Profile
 
 **GET** `/auth/profile` (Protected)
 
-Headers:
+Header:
 
 ```bash
-Authorization: Bearer <token>
+Authorization: Bearer <jwt_token>
 ```
 
 ---
 
-## Student Endpoints
+## 2) Student + Session Endpoints
 
-### 4) Join Student with Teacher Code + Create/Reuse Session
+### Join Student with Teacher Code (create/reuse session)
 
 **POST** `/students/join` (Public)
-
-**Request Body**
 
 ```json
 {
     "teacher_code": "TEACH-91FA",
     "name": "Rahul Sharma",
-    "email": "202351098@iiitvadodara.ac.in"
+    "email": "student@example.com"
 }
 ```
 
-**Response (201 or 200)**
+**Unity must save these fields from response:**
+
+-   `session.session_id`
+-   `student_id`
+-   `teacher_id`
+
+`metaversePayload` already returns all required runtime values for VR.
+
+### Get Active Session
+
+**GET** `/students/session/active` (Public)
+
+Returns the current active session from backend memory.
+
+### Close Active Session
+
+**POST** `/students/session/close` (Public)
+
+Optional body:
 
 ```json
 {
-    "success": true,
-    "teacher_wallet": "0x1234567890abcdef...",
-    "teacher_id": 1,
-    "student_id": 42,
-    "student_full_name": "Rahul Sharma",
-    "student_email": "rahul@email.com",
-    "message": "Student joined and session created successfully",
-    "session": {
-        "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8",
-        "status": "active",
-        "started_at": "2026-03-21T11:22:33.000Z",
-        "reused": false
-    },
-    "metaversePayload": {
-        "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8",
-        "student_id": 42,
-        "teacher_id": 1,
-        "student_name": "Rahul Sharma",
-        "student_email": "rahul@email.com"
-    }
+    "exam_score": 88
 }
 ```
 
-**Notes**
+If `exam_score` is provided, backend updates student score when closing session.
 
--   `400`: Missing fields / invalid email
--   `404`: Invalid teacher code
--   `409`: Duplicate student email for same teacher
+### Verify Student Email
 
-### 5) Update Student Score
+**POST** `/students/verify-email` (Public)
+
+### Update Score (Teacher JWT flow)
 
 **POST** `/students/update-score` (Protected)
-
-**Request Body**
 
 ```json
 {
@@ -140,30 +99,45 @@ Authorization: Bearer <token>
 }
 ```
 
-**Behavior**
+### Update Score (Unity Session flow, no JWT)
 
--   score must be number in `0..100`
--   only the owning teacher can update score
+**POST** `/students/update-score/session` (Public, session-validated)
 
-### 9) Get Student by ID
+```json
+{
+    "student_id": 42,
+    "exam_score": 85,
+    "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8"
+}
+```
+
+`session_id` can be passed by:
+
+-   body key `session_id` or `sessionId`
+-   query key `session_id` or `sessionId`
+-   header `x-session-id`
+
+Validation checks in session flow:
+
+-   session is active
+-   `session.studentId === student_id`
+-   session teacher matches student owner
+
+### Get Student by ID
 
 **GET** `/students/get-student/:id` (Protected)
 
-### 10) Get My Students
+### Get Teacher Students
 
 **GET** `/students/my-students` (Protected)
 
 ---
 
-## Certificate Endpoints
+## 3) Certificate Endpoints
 
-### 11) Issue Certificate
+### Issue Certificate (Teacher JWT flow)
 
 **POST** `/certificates/issue` (Protected)
-
-> Certificate is issued only when `exam_score >= 80`.
-
-**Request Body**
 
 ```json
 {
@@ -172,115 +146,148 @@ Authorization: Bearer <token>
 }
 ```
 
-`teacherId` is optional. If provided, must be a valid number and match student owner.
+### Issue Certificate (Unity Session flow, no JWT)
 
-**Response (201)**
+**POST** `/certificates/issue/session` (Public, session-validated)
 
 ```json
 {
-    "success": true,
-    "message": "Certificate issued successfully",
-    "data": {
-        "tokenId": 1,
-        "txHash": "0xabc123...",
-        "ipfsHash": "QmXyZ...",
-        "emailSent": true,
-        "certificate": {
-            "id": 1,
-            "student_id": 42,
-            "token_id": 1,
-            "tx_hash": "0xabc123...",
-            "ipfs_hash": "QmXyZ...",
-            "issued_by": 1,
-            "revoked": false,
-            "issued_at": "2026-03-16T12:00:00.000Z"
-        },
-        "sessionClosed": true,
-        "closedSessionId": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8"
-    }
+    "studentId": 42,
+    "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8"
 }
 ```
 
-### 12) Get Certificate by Token
+Optional `teacherId` may be sent. If sent, it must match active session teacher.
+
+Certificate issue conditions:
+
+-   student exists
+-   student has `full_name`, `email`, and `exam_score`
+-   `exam_score >= 80`
+-   caller is authorized via JWT or valid active session
+
+### Get Certificate by Token
 
 **GET** `/certificates/token/:tokenId` (Public)
 
-### 13) Get Certificates by Student
+### Get Certificates by Student
 
 **GET** `/certificates/student/:studentId` (Protected)
 
-### 14) Revoke Certificate
+### Revoke Certificate
 
 **PUT** `/certificates/:certificateId/revoke` (Protected)
 
-### 15) Verify Certificate on Blockchain
+### Verify Certificate on Blockchain
 
 **GET** `/certificates/verify/:tokenId` (Public)
 
 ---
 
-## Auth Requirements
+## 4) Unity Flow (What to call and when)
 
-Protected endpoints require:
+### Step 1: Start session
 
-```bash
-Authorization: Bearer <jwt_token>
+Call `POST /students/join` when student enters teacher code.
+
+Store:
+
+-   `session_id`
+-   `student_id`
+-   `teacher_id`
+
+### Step 2: Submit exam score
+
+After VR test finishes, call:
+
+`POST /students/update-score/session`
+
+Body:
+
+```json
+{
+    "student_id": 42,
+    "exam_score": 91,
+    "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8"
+}
 ```
 
-Public endpoints include:
+### Step 3: Certificate decision
+
+-   If score `< 80`: do not call issue certificate.
+-   If score `>= 80`:
+    -   backend may auto-issue in score flow (check `certificateAutomation`), or
+    -   call manual issue endpoint below.
+
+### Step 4: Manual certificate issue (if needed)
+
+Call:
+
+`POST /certificates/issue/session`
+
+Body:
+
+```json
+{
+    "studentId": 42,
+    "session_id": "7fd6f8af-8bd1-4c08-9b8f-2eaf95f02ad8"
+}
+```
+
+### Step 5: Optional close session
+
+Call `POST /students/session/close` when done.
+
+---
+
+## 5) Common Error Codes for Unity Team
+
+-   `400`: invalid payload (missing fields, invalid score)
+-   `401`: missing token/session auth where needed
+-   `403`: invalid/inactive session, student mismatch, teacher mismatch
+-   `404`: student/session/certificate not found
+-   `500`: server/internal failure
+
+---
+
+## 6) Auth Summary
+
+### Protected (JWT required)
+
+-   `/auth/profile`
+-   `/students/update-score`
+-   `/students/my-students`
+-   `/students/get-student/:id`
+-   `/certificates/issue`
+-   `/certificates/student/:studentId`
+-   `/certificates/:certificateId/revoke`
+
+### Public (no JWT required)
 
 -   `/auth/signup`
 -   `/auth/login`
 -   `/students/join`
 -   `/students/verify-email`
--   `/students/session/:sessionId/active`
--   `/students/session/:sessionId/close`
+-   `/students/session/active`
+-   `/students/session/close`
+-   `/students/update-score/session`
+-   `/certificates/issue/session`
 -   `/certificates/token/:tokenId`
 -   `/certificates/verify/:tokenId`
 
 ---
 
-## Session Model Notes (Current Implementation)
+## 7) Session Model Notes
 
--   Session storage is in-memory (`TrainingSession.model.ts`), not persisted to DB.
--   One active session pointer is tracked globally in controller (`currentActiveSessionId`).
--   `current` alias resolves to this global active session id.
--   If server restarts, session memory is cleared.
+-   Session storage is in-memory (`TrainingSession.model.ts`), not persisted.
+-   On backend restart, active sessions are lost.
+-   Current implementation uses a single active session pointer in controller scope.
 
 ---
 
-## Important Notes
+## 8) Important Notes
 
-1. Certificate score threshold is **80**.
-2. Student onboarding is through `/students/join` using `teacher_code`.
-3. Session lifecycle is now available publicly for metaverse integration.
-4. Certificate issuance may close active session automatically.
-5. Certificate metadata is uploaded to IPFS during issuance.
-
-## Team Shared Access (Teacher Accounts)
-
-Use these for local team testing/access.
-
-### Teacher Test Profile
-
-
-```json
-[
-    {
-        "id": 1,
-        "wallet_address": "0x63A22B04addD5E8fd248bf10D5c7D48233957050",
-        "email": "teacher1773681775735@test.com",
-        "full_name": "Test Teacher",
-        "password": "Test@123456"
-        "teacher_code": "TEACH-390D",
-    },
-    {
-        "id": 2,
-        "wallet_address": "0xcA1B4c790D5B3F7A27817237F03936c43474AC39",
-        "email": "erandesamadhan2003@gmail.com",
-        "full_name": "Samadhan Subhash Erande",
-        "password": "samadhan",
-        "teacher_code": "TEACH-CC24",
-    }
-]
-```
+1. Certificate threshold is **80**.
+2. Certificate metadata is uploaded to IPFS during issuance.
+3. Issuance is also recorded on blockchain.
+4. Issuance may close active session automatically.
