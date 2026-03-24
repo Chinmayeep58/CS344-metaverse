@@ -6,6 +6,7 @@ export interface Student {
     full_name: string;
     email?: string;
     exam_score?: number;
+    score_email_sent?: boolean;
     created_by?: number;
     created_at: Date;
     updated_at: Date;
@@ -25,6 +26,7 @@ export const createTableQuery = `
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     exam_score INTEGER,
+    score_email_sent BOOLEAN DEFAULT FALSE,
     created_by INTEGER REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -80,6 +82,27 @@ export const getAllStudentsByTeacher = async (
     return result.rows;
 };
 
+export const getStudentsWithPendingScoreEmail = async (): Promise<Student[]> => {
+    const query = `
+    SELECT * FROM students WHERE exam_score IS NOT NULL AND score_email_sent IS DISTINCT FROM TRUE AND email IS NOT NULL;
+  `;
+    const result = await pool.query(query);
+    return result.rows;
+};
+
+export const getEligibleStudentsWithoutCertificate = async (): Promise<Student[]> => {
+    const query = `
+    SELECT s.*
+    FROM students s
+    LEFT JOIN certificates c ON c.student_id = s.id
+    WHERE s.exam_score >= 80
+      AND s.email IS NOT NULL
+      AND c.id IS NULL;
+  `;
+    const result = await pool.query(query);
+    return result.rows;
+};
+
 export const getStudentByEmailAndTeacher = async (
     email: string,
     teacherId: number,
@@ -104,4 +127,49 @@ export const updateStudentExamScore = async (
     `;
     const result = await pool.query(query, [examScore, studentId]);
     return result.rows[0];
+};
+
+export const updateStudentScoreEmailStatus = async (
+    studentId: number,
+    emailSent: boolean,
+): Promise<Student | undefined> => {
+    const query = `
+    UPDATE students
+    SET score_email_sent = $1,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $2
+    RETURNING *;
+    `;
+
+    const result = await pool.query(query, [emailSent, studentId]);
+    return result.rows[0];
+};
+
+export const resetAllScoreEmailStatus = async (
+    emailSent: boolean,
+): Promise<{ rowCount: number | null }> => {
+    const query = `
+    UPDATE students
+    SET score_email_sent = $1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE exam_score IS NOT NULL;
+    `;
+
+    const result = await pool.query(query, [emailSent]);
+    return { rowCount: result.rowCount };
+};
+
+export const resetScoreEmailStatus = async (
+    studentIds: number[],
+    emailSent: boolean = false,
+): Promise<{ rowCount: number | null }> => {
+    const query = `
+    UPDATE students
+    SET score_email_sent = $2,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ANY($1);
+    `;
+
+    const result = await pool.query(query, [studentIds, emailSent]);
+    return { rowCount: result.rowCount };
 };

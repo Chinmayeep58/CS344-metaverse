@@ -26,6 +26,10 @@ export const runMigrations = async () => {
         // Create students table and indexes
         await pool.query(createStudentsTable);
         await pool.query(createStudentIndexes);
+        // Add score_email_sent column if missing (for existing databases)
+        await pool.query(
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS score_email_sent BOOLEAN DEFAULT FALSE;",
+        );
         console.log("✓ Students table created");
 
         // Create certificates table and indexes

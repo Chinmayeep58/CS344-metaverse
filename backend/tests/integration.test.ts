@@ -155,6 +155,7 @@ async function updateScoreWithSession(
     issued: boolean;
     eligible: boolean;
     tokenId: number | null;
+    scoreEmailSent: boolean;
 }> {
     try {
         const response = await axios.post(
@@ -183,6 +184,7 @@ async function updateScoreWithSession(
             tokenId: Number.isFinite(tokenId as number)
                 ? Number(tokenId)
                 : null,
+            scoreEmailSent: Boolean(response.data?.scoreEmailSent),
         };
     } catch (error: any) {
         if (error?.response?.status !== 404) {
@@ -212,6 +214,7 @@ async function updateScoreWithSession(
                 issued: false,
                 eligible: false,
                 tokenId: null,
+                scoreEmailSent: false,
             };
         }
 
@@ -231,6 +234,7 @@ async function updateScoreWithSession(
                 issued: issueRes.status === 201,
                 eligible: true,
                 tokenId: Number.isFinite(tokenId) ? tokenId : null,
+                scoreEmailSent: false,
             };
         } catch (issueError: any) {
             if (issueError?.response?.status === 409) {
@@ -242,6 +246,7 @@ async function updateScoreWithSession(
                     issued: false,
                     eligible: true,
                     tokenId: Number.isFinite(tokenId) ? tokenId : null,
+                    scoreEmailSent: false,
                 };
             }
 
@@ -338,6 +343,12 @@ async function run() {
         if (!scoreResult.eligible) {
             throw new Error(
                 `Student ${student.studentId} should be certificate-eligible at score 82`,
+            );
+        }
+
+        if (!scoreResult.scoreEmailSent) {
+            throw new Error(
+                `Score update email should have been sent for student ${student.studentId}`,
             );
         }
 

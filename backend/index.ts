@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db";
 import { runMigrations } from "./migrations/init";
+import { runPendingScoreEmailCron } from "./services/score-email-scheduler.service";
 import authRoutes from "./routes/auth.routes";
 import studentRoutes from "./routes/student.routes";
 import certificateRoutes from "./routes/certificate.routes";
@@ -63,6 +64,15 @@ app.listen(PORT, async () => {
 
         await runMigrations();
         console.log("Migrations completed");
+
+        const FIVE_MINUTES = 5 * 60 * 1000;
+        setInterval(async () => {
+            await runPendingScoreEmailCron();
+        }, FIVE_MINUTES);
+
+        // run once on startup too
+        await runPendingScoreEmailCron();
+
         console.log(`Server is running on port ${PORT}`);
     } catch (err) {
         console.error("Failed to start server:", err);

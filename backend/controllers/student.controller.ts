@@ -5,6 +5,8 @@ import {
     getAllStudentsByTeacher,
     getStudentByEmailAndTeacher,
     updateStudentExamScore,
+    updateStudentScoreEmailStatus,
+    resetAllScoreEmailStatus,
 } from "../models/Student.model";
 import { getUserByTeacherCode } from "../models/User.model";
 import {
@@ -13,7 +15,10 @@ import {
 } from "../models/Certificate.model";
 import { uploadMetadataToIPFS } from "../services/ipfs.service";
 import { issueCertificateOnChain } from "../services/blockchain.service";
-import { sendCertificateIssuedEmail } from "../services/mail.service";
+import {
+    sendCertificateIssuedEmail,
+    sendStudentScoreUpdatedEmail,
+} from "../services/mail.service";
 import { verifyEmailAddress } from "../services/email-verification.service";
 import {
     createOrReuseTrainingSession,
@@ -134,6 +139,35 @@ export const updateStudentScore = async (req: Request, res: Response) => {
             Number(student_id),
             parsedScore,
         );
+
+        let scoreUpdateEmailSent = false;
+        if (updatedStudent && updatedStudent.email) {
+            try {
+                scoreUpdateEmailSent = await sendStudentScoreUpdatedEmail({
+                    recipientEmail: updatedStudent.email,
+                    studentName: updatedStudent.full_name,
+                    examScore: parsedScore,
+                });
+            } catch (scoreEmailError: any) {
+                console.warn(
+                    "Failed to send score update email:",
+                    scoreEmailError?.message || scoreEmailError,
+                );
+                scoreUpdateEmailSent = false;
+            }
+
+            try {
+                await updateStudentScoreEmailStatus(
+                    updatedStudent.id,
+                    scoreUpdateEmailSent,
+                );
+            } catch (statusError: any) {
+                console.warn(
+                    "Failed to update student score_email_sent flag:",
+                    statusError?.message || statusError,
+                );
+            }
+        }
 
         let certificateAutomation: {
             eligible: boolean;
@@ -269,6 +303,7 @@ export const updateStudentScore = async (req: Request, res: Response) => {
             success: true,
             message: "Student exam score updated successfully",
             data: updatedStudent,
+            scoreEmailSent: scoreUpdateEmailSent,
             certificateAutomation,
             sessionClosed: Boolean(closedSession),
             closedSessionId: closedSession?.sessionId || null,
@@ -436,6 +471,62 @@ export const getTeacherStudents = async (req: Request, res: Response) => {
         return res.status(500).json({
             success: false,
             message: "Failed to fetch students",
+            error: error.message || "Internal server error",
+        });
+    }
+};
+
+export const resetScoreEmailStatus = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user?.id;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized",
+            });
+        }
+
+        const { student_id } = req.body || {};
+
+        if (student_id !== undefined) {
+            const student = await getStudentById(Number(student_id));
+            if (!student) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Student not found",
+                });
+            }
+
+            if (Number(student.created_by) !== Number(userId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Not allowed to reset this student",
+                });
+            }
+
+            const updated = await updateStudentScoreEmailStatus(
+                Number(student_id),
+                false,
+            );
+
+            return res.status(200).json({
+                success: true,
+                message: "Student score_email_sent reset",
+                data: updated,
+            });
+        }
+
+        const result = await resetAllScoreEmailStatus(false);
+        return res.status(200).json({
+            success: true,
+            message: `All students score_email_sent reset (rows: ${result.rowCount || 0})`,
+            data: result,
+        });
+    } catch (error: any) {
+        console.error("Error resetting score email status:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to reset score email status",
             error: error.message || "Internal server error",
         });
     }
