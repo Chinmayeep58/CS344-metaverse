@@ -79,7 +79,7 @@ Optional body:
 ```json
 {
     "exam_score": 88
-}
+}   
 ```
 
 If `exam_score` is provided, backend updates student score when closing session.

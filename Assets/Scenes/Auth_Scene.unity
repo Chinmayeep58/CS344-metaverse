@@ -2441,9 +2441,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff9dcd483d512b44b916603d3bc5e2d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nameText: {fileID: 1566638054}
+  statusText: {fileID: 1566638054}
   nextSceneName: EQ_Scene1
-  delay: 3
 --- !u!1 &1566638052
 GameObject:
   m_ObjectHideFlags: 0
