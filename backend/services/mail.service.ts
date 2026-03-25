@@ -162,3 +162,43 @@ export const sendCertificateIssuedEmail = async (
 
     return true;
 };
+
+interface StudentScoreEmailInput {
+    recipientEmail: string;
+    studentName: string;
+    examScore: number;
+}
+
+export const sendStudentScoreUpdatedEmail = async (
+    input: StudentScoreEmailInput,
+): Promise<boolean> => {
+    if (!isMailConfigured()) {
+        console.warn(
+            "Score update email not sent: SMTP configuration is missing (SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS).",
+        );
+        return false;
+    }
+
+    const transporter = createTransporter();
+    const fromAddress = process.env.MAIL_FROM || process.env.SMTP_USER;
+
+    await transporter.sendMail({
+        from: fromAddress,
+        to: input.recipientEmail,
+        subject: "Your VR Disaster Training Score Has Been Updated",
+        text: [
+            `Hello ${input.studentName},`,
+            "",
+            `Your exam score has been updated to ${input.examScore}.`,
+            "",
+            "Thank you for using the VR Disaster Training platform.",
+        ].join("\n"),
+        html: `
+            <p>Hello <strong>${input.studentName}</strong>,</p>
+            <p>Your exam score has been updated to <strong>${input.examScore}</strong>.</p>
+            <p>Thank you for using the VR Disaster Training platform.</p>
+        `,
+    });
+
+    return true;
+};

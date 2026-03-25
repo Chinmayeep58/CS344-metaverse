@@ -18,6 +18,7 @@ export default function StudentTable({ students }: { students: Student[] }) {
                         <TableHead>Student Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Exam Score</TableHead>
+                        <TableHead>Email Sent</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -40,6 +41,9 @@ export default function StudentTable({ students }: { students: Student[] }) {
                                     {student.exam_score === undefined
                                         ? "Pending"
                                         : student.exam_score}
+                                </TableCell>
+                                <TableCell>
+                                    {student.score_email_sent ? "✅" : "—"}
                                 </TableCell>
                             </TableRow>
                         ))

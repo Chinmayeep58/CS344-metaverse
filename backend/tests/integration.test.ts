@@ -38,41 +38,23 @@ function logWarning(message: string) {
 }
 
 type TeacherAccount = {
-    fullName: string;
-    email: string;
-    walletAddress: string;
     teacherCode: string;
-    password: string;
-};
-
-type TeacherSession = TeacherAccount & {
-    id: number;
-    token: string;
 };
 
 type JoinedStudent = {
-    teacher: TeacherSession;
+    teacher: TeacherAccount;
     name: string;
     email: string;
     studentId: number;
     sessionId: string;
-    certificateTokenId?: number;
 };
 
 const TEACHERS: TeacherAccount[] = [
     {
-        fullName: "Test Teacher",
-        email: "teacher1773681775735@test.com",
-        walletAddress: "0x63A22B04addD5E8fd248bf10D5c7D48233957050",
         teacherCode: "TEACH-390D",
-        password: process.env.TEACHER1_PASSWORD || "Test@123456",
     },
     {
-        fullName: "Samadhan Subhash Erande",
-        email: "erandesamadhan2003@gmail.com",
-        walletAddress: "0xcA1B4c790D5B3F7A27817237F03936c43474AC39",
         teacherCode: "TEACH-CC24",
-        password: process.env.TEACHER2_PASSWORD || "samadhan",
     },
 ];
 
@@ -101,13 +83,7 @@ const STUDENT_PLANS = [
     },
 ];
 
-const normalizeInstituteEmail = (email: string): string => {
-    const trimmed = email.trim().toLowerCase();
-    if (trimmed.endsWith("@iiitvadodara.ac")) return `${trimmed}.in`;
-    return trimmed;
-};
-
-const buildStudentsForTeachers = (teachers: TeacherSession[]) => {
+const buildStudentsForTeachers = (teachers: TeacherAccount[]) => {
     return STUDENT_PLANS.map((plan) => ({
         teacher: teachers[plan.teacherIndex],
         name: plan.name,
@@ -126,36 +102,8 @@ async function testHealthCheck() {
     logSuccess("Health check passed");
 }
 
-async function loginTeacher(teacher: TeacherAccount): Promise<TeacherSession> {
-    const response = await axios.post(`${BASE_URL}/auth/login`, {
-        email: teacher.email,
-        password: teacher.password,
-    });
-
-    if (
-        response.status !== 200 ||
-        !response.data?.token ||
-        !response.data?.user
-    ) {
-        throw new Error(`Login failed for ${teacher.email}`);
-    }
-
-    const gotCode = response.data.user.teacherCode;
-    if (gotCode !== teacher.teacherCode) {
-        logWarning(
-            `Teacher code mismatch for ${teacher.email}. Expected ${teacher.teacherCode}, got ${gotCode}`,
-        );
-    }
-
-    return {
-        ...teacher,
-        id: Number(response.data.user.id),
-        token: response.data.token,
-    };
-}
-
 async function joinStudent(
-    teacher: TeacherSession,
+    teacher: TeacherAccount,
     name: string,
     email: string,
 ): Promise<JoinedStudent> {
@@ -170,7 +118,6 @@ async function joinStudent(
     }
 
     const studentId = Number(response.data?.student_id);
-    const teacherId = Number(response.data?.teacher_id);
     const sessionId = response.data?.session?.session_id;
 
     const returnedName = String(response.data?.student_full_name || "").trim();
@@ -182,11 +129,6 @@ async function joinStudent(
 
     if (!studentId || !sessionId) {
         throw new Error(`Invalid join response for ${name}`);
-    }
-    if (teacherId !== teacher.id) {
-        throw new Error(
-            `Teacher mismatch in join for ${name}. expected=${teacher.id}, got=${teacherId}`,
-        );
     }
 
     return { teacher, name, email, studentId, sessionId };
@@ -204,72 +146,119 @@ async function getSessionActive(): Promise<string> {
     return String(response.data.data.sessionId);
 }
 
-async function closeSession(sessionId: string, score: number) {
-    const response = await axios.post(
-        `${BASE_URL}/students/session/${sessionId}/close`,
-        { exam_score: score },
-    );
-    if (response.status !== 200 || !response.data?.success) {
-        throw new Error(`Close session failed for session ${sessionId}`);
-    }
-}
-
-async function updateScore(
-    teacher: TeacherSession,
+async function updateScoreWithSession(
     studentId: number,
+    sessionId: string,
     score: number,
-) {
-    const response = await axios.post(
-        `${BASE_URL}/students/update-score`,
-        { student_id: studentId, exam_score: score },
-        { headers: { Authorization: `Bearer ${teacher.token}` } },
-    );
+): Promise<{
+    sessionClosed: boolean;
+    issued: boolean;
+    eligible: boolean;
+    tokenId: number | null;
+    scoreEmailSent: boolean;
+}> {
+    try {
+        const response = await axios.post(
+            `${BASE_URL}/students/update-score/session`,
+            {
+                student_id: studentId,
+                exam_score: score,
+                session_id: sessionId,
+            },
+        );
 
-    if (response.status !== 200 || !response.data?.success) {
-        throw new Error(`Update score failed for student ${studentId}`);
+        if (response.status !== 200 || !response.data?.success) {
+            throw new Error(`Update score failed for student ${studentId}`);
+        }
+
+        const automation = response.data?.certificateAutomation || {};
+        const tokenId =
+            automation?.tokenId !== null && automation?.tokenId !== undefined
+                ? Number(automation.tokenId)
+                : null;
+
+        return {
+            sessionClosed: Boolean(response.data?.sessionClosed),
+            issued: Boolean(automation?.issued),
+            eligible: Boolean(automation?.eligible),
+            tokenId: Number.isFinite(tokenId as number)
+                ? Number(tokenId)
+                : null,
+            scoreEmailSent: Boolean(response.data?.scoreEmailSent),
+        };
+    } catch (error: any) {
+        if (error?.response?.status !== 404) {
+            throw error;
+        }
+
+        logWarning(
+            "/students/update-score/session not available on this deployment. Trying legacy session flow...",
+        );
+
+        const closeRes = await axios.post(
+            `${BASE_URL}/students/session/close`,
+            {
+                exam_score: score,
+            },
+        );
+
+        if (closeRes.status !== 200 || !closeRes.data?.success) {
+            throw new Error(
+                `Legacy close session flow failed for student ${studentId}`,
+            );
+        }
+
+        if (score < 80) {
+            return {
+                sessionClosed: true,
+                issued: false,
+                eligible: false,
+                tokenId: null,
+                scoreEmailSent: false,
+            };
+        }
+
+        try {
+            const issueRes = await axios.post(
+                `${BASE_URL}/certificates/issue/session`,
+                {
+                    studentId,
+                    session_id: sessionId,
+                },
+                { timeout: 120000 },
+            );
+
+            const tokenId = Number(issueRes.data?.data?.tokenId);
+            return {
+                sessionClosed: true,
+                issued: issueRes.status === 201,
+                eligible: true,
+                tokenId: Number.isFinite(tokenId) ? tokenId : null,
+                scoreEmailSent: false,
+            };
+        } catch (issueError: any) {
+            if (issueError?.response?.status === 409) {
+                const tokenId = Number(
+                    issueError?.response?.data?.data?.tokenId,
+                );
+                return {
+                    sessionClosed: true,
+                    issued: false,
+                    eligible: true,
+                    tokenId: Number.isFinite(tokenId) ? tokenId : null,
+                    scoreEmailSent: false,
+                };
+            }
+
+            if (issueError?.response?.status === 404) {
+                throw new Error(
+                    "Server is missing both /students/update-score/session and /certificates/issue/session. Please deploy latest backend build.",
+                );
+            }
+
+            throw issueError;
+        }
     }
-}
-
-async function getStudentCertificates(
-    teacher: TeacherSession,
-    studentId: number,
-): Promise<any[]> {
-    const response = await axios.get(
-        `${BASE_URL}/certificates/student/${studentId}`,
-        {
-            headers: { Authorization: `Bearer ${teacher.token}` },
-        },
-    );
-
-    if (response.status !== 200 || !Array.isArray(response.data?.data)) {
-        throw new Error(`Get certificates failed for student ${studentId}`);
-    }
-
-    return response.data.data;
-}
-
-async function issueCertificate(
-    teacher: TeacherSession,
-    studentId: number,
-): Promise<number> {
-    logWarning(
-        `Issuing certificate for student ${studentId} (blockchain call)...`,
-    );
-    const response = await axios.post(
-        `${BASE_URL}/certificates/issue`,
-        { studentId, teacherId: teacher.id },
-        {
-            headers: { Authorization: `Bearer ${teacher.token}` },
-            timeout: 120000,
-        },
-    );
-
-    const tokenId = Number(response.data?.data?.tokenId);
-    if (response.status !== 201 || !Number.isFinite(tokenId)) {
-        throw new Error(`Issue certificate failed for student ${studentId}`);
-    }
-
-    return tokenId;
 }
 
 async function verifyCertificate(tokenId: number) {
@@ -288,41 +277,26 @@ async function verifyCertificate(tokenId: number) {
     }
 }
 
-async function validateTeacherStudentsList(teacher: TeacherSession) {
-    const response = await axios.get(`${BASE_URL}/students/my-students`, {
-        headers: { Authorization: `Bearer ${teacher.token}` },
-    });
-
-    if (response.status !== 200 || !Array.isArray(response.data?.data)) {
-        throw new Error(`Get my-students failed for teacher ${teacher.email}`);
-    }
-}
-
-async function getCurrentActiveSessionId(): Promise<string> {
-    const response = await axios.get(`${BASE_URL}/students/session/active`);
-    if (
-        response.status !== 200 ||
-        !response.data?.success ||
-        !response.data?.data?.sessionId
-    ) {
-        throw new Error("Failed to fetch current active session");
-    }
-    return String(response.data.data.sessionId);
-}
-
-async function closeCurrentSession(score: number) {
-    const response = await axios.post(`${BASE_URL}/students/session/close`, {
-        exam_score: score,
-    });
-    if (response.status !== 200 || !response.data?.success) {
-        throw new Error("Failed to close current active session");
+async function assertNoActiveSession() {
+    try {
+        await axios.get(`${BASE_URL}/students/session/active`);
+        throw new Error("Expected no active session, but one exists");
+    } catch (error: any) {
+        const status = error?.response?.status;
+        if (status !== 404) {
+            throw new Error(
+                `Expected 404 for no active session, got ${
+                    status || "unknown"
+                }`,
+            );
+        }
     }
 }
 
 async function run() {
     console.log("\n" + "=".repeat(80));
     log(
-        "🎓 SEQUENTIAL FLOW: JOIN 1 STUDENT -> COMPLETE TRAINING -> ISSUE CERTIFICATE",
+        "🎓 UNITY FLOW: JOIN -> UPDATE SCORE (SESSION) -> AUTO CERTIFICATE -> AUTO CLOSE",
         colors.cyan,
     );
     console.log("=".repeat(80));
@@ -330,22 +304,12 @@ async function run() {
     logInfo(`Base URL: ${BASE_URL}`);
     await testHealthCheck();
 
-    logInfo("\nTest 2: Login both teachers");
-    const teacherSessions: TeacherSession[] = [];
-    for (const teacher of TEACHERS) {
-        const session = await loginTeacher(teacher);
-        teacherSessions.push(session);
-        logSuccess(`Logged in: ${session.fullName} (${session.teacherCode})`);
-    }
+    const studentPlans = buildStudentsForTeachers(TEACHERS);
 
-    const studentPlans = buildStudentsForTeachers(teacherSessions);
-
-    logInfo(
-        "\nTest 3: Sequentially process students (one active session at a time)",
-    );
+    logInfo("\nTest 2: Sequentially process students using session-only flow");
     for (const plan of studentPlans) {
         logInfo(
-            `\nJoining ${plan.name} (${plan.email}) for ${plan.teacher.teacherCode}`,
+            `\n[Dashboard] Joining ${plan.name} (${plan.email}) for ${plan.teacher.teacherCode}`,
         );
 
         const student = await joinStudent(plan.teacher, plan.name, plan.email);
@@ -353,37 +317,88 @@ async function run() {
             `Joined ${student.name} -> studentId=${student.studentId}, sessionId=${student.sessionId}`,
         );
 
-        const activeSessionId = await getSessionActive();
+        const activeSessionId = await getSessionActive(); // [VR] fetch active session
         if (activeSessionId !== student.sessionId) {
             throw new Error(
                 `Active session mismatch. expected=${student.sessionId}, got=${activeSessionId}`,
             );
         }
-        logSuccess(`Session is active: ${activeSessionId}`);
+        logSuccess(`Session handoff Dashboard -> VR works: ${activeSessionId}`);
 
-        await closeCurrentSession(82);
-        logSuccess(
-            "Training completed and current session closed with exam_score=82",
+        logWarning(
+            `Updating score via /students/update-score/session for student ${student.studentId} (auto certificate expected)...`,
+        );
+        const scoreResult = await updateScoreWithSession(
+            student.studentId,
+            student.sessionId,
+            82,
         );
 
-        // certificate.controller.ts route coverage
-        const tokenId = await issueCertificate(plan.teacher, student.studentId);
+        if (!scoreResult.sessionClosed) {
+            throw new Error(
+                `Session was not auto-closed for student ${student.studentId}`,
+            );
+        }
+
+        if (!scoreResult.eligible) {
+            throw new Error(
+                `Student ${student.studentId} should be certificate-eligible at score 82`,
+            );
+        }
+
+        if (!scoreResult.scoreEmailSent) {
+            throw new Error(
+                `Score update email should have been sent for student ${student.studentId}`,
+            );
+        }
+
+        if (!scoreResult.tokenId) {
+            throw new Error(
+                `Missing tokenId in certificateAutomation for student ${student.studentId}`,
+            );
+        }
+
         logSuccess(
-            `Certificate issued via /certificates/issue. tokenId=${tokenId}`,
+            `Score updated and flow completed. issued=${scoreResult.issued}, tokenId=${scoreResult.tokenId}`,
         );
 
-        await verifyCertificate(tokenId);
-        logSuccess(`Certificate verified. tokenId=${tokenId}`);
+        await assertNoActiveSession();
+        logSuccess("Session auto-closed and no active session remains");
 
-        await validateTeacherStudentsList(plan.teacher);
+        await verifyCertificate(scoreResult.tokenId);
+        logSuccess(`Certificate verified. tokenId=${scoreResult.tokenId}`);
+
+        const rejoin = await joinStudent(plan.teacher, plan.name, plan.email);
         logSuccess(
-            `Teacher students list validated for ${plan.teacher.teacherCode}`,
+            `Rejoined existing student for duplicate check -> studentId=${rejoin.studentId}`,
+        );
+
+        const duplicateRun = await updateScoreWithSession(
+            rejoin.studentId,
+            rejoin.sessionId,
+            95,
+        );
+
+        if (duplicateRun.issued) {
+            throw new Error(
+                `Duplicate certificate was minted for student ${rejoin.studentId}`,
+            );
+        }
+
+        if (duplicateRun.tokenId !== scoreResult.tokenId) {
+            throw new Error(
+                `Duplicate flow returned mismatched tokenId. first=${scoreResult.tokenId}, second=${duplicateRun.tokenId}`,
+            );
+        }
+
+        logSuccess(
+            `Duplicate prevention passed. Existing token reused: ${duplicateRun.tokenId}`,
         );
     }
 
     console.log("\n" + "=".repeat(80));
     logSuccess(
-        "✅ Completed: sequential training + certificate issuance for all students.",
+        "✅ Completed: session-only Unity flow with auto-issue, auto-close, and duplicate prevention.",
     );
     console.log("=".repeat(80) + "\n");
 }

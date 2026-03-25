@@ -7,6 +7,7 @@ import {
     verifyStudentEmailAddress,
     getActiveStudentSession,
     closeStudentSession,
+    resetScoreEmailStatus,
 } from "../controllers/student.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 
@@ -23,6 +24,7 @@ router.post("/update-score/session", updateStudentScore);
 
 // All routes require authentication
 router.post("/update-score", authenticateToken, updateStudentScore);
+router.post("/reset-score-email", authenticateToken, resetScoreEmailStatus);
 router.get("/my-students", authenticateToken, getTeacherStudents);
 router.get("/get-student/:id", authenticateToken, getStudent);
 
